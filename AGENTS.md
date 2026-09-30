@@ -24,6 +24,7 @@ These are settled decisions. Do not silently replace them.
 | Pickup verification | Recipient QR reference and signed-in confirmation, followed by donor completion |
 | Assignment demo | Two Android phones use the same Firebase project with a separate admin web client |
 | Navigation | Expo Router is the proposed default; confirm current project setup before adding it |
+| Package manager | pnpm for both apps, with a lockfile in each app directory |
 
 ## 3. Rules for implementation
 1. Preserve the approved stack and product scope unless the project owner explicitly approves a change.
@@ -51,12 +52,14 @@ Before implementation:
 - Identify any missing product decision rather than guessing.
 
 During implementation:
+- Run package commands with pnpm from the app directory. Use `pnpm exec expo install` for Expo SDK packages and commit each app's `pnpm-lock.yaml`.
 - Follow existing naming, formatting, and architecture conventions.
 - Keep components focused and avoid unnecessary dependencies.
 - Add or update tests for meaningful logic.
 - Do not weaken security rules to make a feature work.
 
 After implementation:
+- Run `pnpm lint`, `pnpm format:check`, and `pnpm typecheck` in each affected app.
 - Summarize changed files and behavior.
 - Give exact commands to run/test.
 - List any Firebase console setup or manual steps.
