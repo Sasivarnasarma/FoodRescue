@@ -1,0 +1,10 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Safe starter: deny all client access until paths, ownership, file types,
+    // size limits, and reviewer access have been implemented and tested.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
