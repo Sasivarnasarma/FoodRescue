@@ -19,3 +19,11 @@ createRoot(document.getElementById('root')!).render(
     </ThemeProvider>
   </StrictMode>,
 );
+
+if (import.meta.env.PROD) {
+  void import('./lib/firebase')
+    .then(({ startFirebaseAnalytics }) => startFirebaseAnalytics())
+    .catch(() => {
+      console.warn('Firebase Analytics could not start.');
+    });
+}

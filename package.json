@@ -1,0 +1,17 @@
+{
+  "name": "foodrescue",
+  "private": true,
+  "packageManager": "pnpm@11.7.0",
+  "engines": {
+    "node": ">=22.20.0"
+  },
+  "scripts": {
+    "mobile": "pnpm --filter foodrescue-mobile start",
+    "admin": "pnpm --filter foodrescue-admin dev",
+    "lint": "pnpm -r --if-present run lint",
+    "format:check": "pnpm -r --if-present run format:check",
+    "typecheck": "pnpm -r --if-present run typecheck",
+    "test:rules": "pnpm --filter foodrescue-firebase test",
+    "test:auth": "pnpm --filter foodrescue-firebase test:auth"
+  }
+}

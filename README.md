@@ -8,6 +8,9 @@ FoodRescue is an Android-first university project that connects businesses with 
 FoodRescue/
 ├── AGENTS.md
 ├── README.md
+├── package.json          # Root pnpm commands
+├── pnpm-workspace.yaml   # Workspace packages and dependency build policy
+├── pnpm-lock.yaml        # Shared dependency lockfile
 ├── docs/                 # Product, architecture, data, security and delivery docs
 ├── mobile/               # Expo + React Native + TypeScript Android app
 ├── admin/                # React + TypeScript web admin dashboard
@@ -31,27 +34,38 @@ See `docs/03_TECHNICAL_SPECIFICATION.md` for the stack and [MVP decisions and no
 
 ## Getting started
 
-Phase 0 provides separate Android and admin web starters. Use **pnpm 11.7.0** and Node.js **22.20.0** as the development baseline. Each app has its own lockfile.
+Phase 0 provides separate Android and admin web starters. Use **pnpm 11.7.0** and Node.js **22.20.0** as the development baseline. The mobile app, admin app and Firebase tooling share a root pnpm workspace and lockfile.
 
 From the repository root, install dependencies:
 
 ```powershell
-pnpm --dir mobile install --frozen-lockfile
-pnpm --dir admin install --frozen-lockfile
+pnpm install --frozen-lockfile
 ```
 
 Run these in separate terminals:
 
 ```powershell
-pnpm --dir mobile start
-pnpm --dir admin dev
+pnpm mobile
+pnpm admin
 ```
 
 Open the Expo QR code with SDK-compatible Expo Go on an Android phone on the same network. Open the URL printed by Vite for the admin app. See [mobile setup](mobile/README.md) and [admin setup](admin/README.md) for local checks.
 
+### Workspace checks
+
+From the repository root, run the checks across the apps:
+
+```powershell
+pnpm lint
+pnpm format:check
+pnpm typecheck
+```
+
+Package-specific commands such as `pnpm --dir admin build` still work. Firebase tests run with `pnpm test:auth` and `pnpm test:rules`. Build-script permissions are maintained once in the root `pnpm-workspace.yaml`.
+
 ### Firebase setup for Phase 1
 
-Select a Firestore region and use a Firebase Spark project without billing. Enable email/password authentication, register the client apps, and use the placeholder `.env.example` files to configure them locally. Keep hosted Storage disabled. Provision the first admin claim through an authorized local operator. Test the Firestore rules in the Emulator Suite before deploying access rules. The Phase 0 starters run without Firebase configuration.
+Select a Firestore region and use a Firebase Spark project without billing. Enable email/password authentication. Both clients use Firebase Web SDK configuration from the same project. Copy the root `.env.example` to `.env` at the repository root and fill in the configuration once for both clients. A single Web registration works for local development. The admin app runs through Vite locally, and Firebase Hosting is available when the site is ready to publish. Keep Firebase Cloud Storage disabled. Provision the first admin claim through an authorized local operator. Test the Firestore rules in the Emulator Suite before deploying access rules. Use `pnpm dlx firebase-tools` when you need the Firebase CLI.
 
 ## Team development
 

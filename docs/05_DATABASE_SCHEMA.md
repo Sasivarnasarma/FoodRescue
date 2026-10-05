@@ -5,7 +5,7 @@ Planned contract for the donation-only MVP. See [MVP decisions](15_MVP_DECISIONS
 ## 1. Identity and verification
 
 - `users/{uid}` is private to the owner and admin. Fields: immutable `role` (`provider` or `organization`), `accountStatus` (`active` or `suspended`), `displayName`, `createdAt`, `updatedAt`. Public signup starts active. An admin custom claim grants admin authority independently of the profile role.
-- `profiles/{uid}` stores the donor or organization name, type, and `verificationStatus` (`pending`, `approved`, or `rejected`). One profile per user. Owner can create a pending profile, and a claimed admin reviews it. The reviewed profile records `lastAuditId`. Admin audit rules bind that new ID, target UID, previous and new verification statuses, actor and server time. Use synthetic application details for the assignment. Keep any reviewer feedback owner/admin only in the private user record. Review with an atomic audit record.
+- `profiles/{uid}` stores the donor or organization `name`, `type` (matching the account's role), and `verificationStatus` (`pending`, `approved`, or `rejected`). One profile per user. The owner can create a pending profile, and a claimed admin reviews it. The reviewed profile records `lastAuditId`. Admin audit rules bind that new ID, target UID, previous and new verification statuses, actor and server time. Use synthetic application details for the assignment. In Phase 1 the applicant sees the decision, and the reason stays in the admin-only audit record.
 - Use Firestore Timestamp values. Rules compare authoritative write times with `request.time`. Role, verification, and account status are protected fields.
 
 ## 2. Donation listings
@@ -53,6 +53,6 @@ Approval and collection update the listing and chosen request in the same transa
 
 ## 4. Audit and reads
 
-`adminAuditLogs/{auditId}` stores admin UID, target UID, action, reason, and timestamp. Link the review update to a new immutable audit record and validate both writes together.
+`adminAuditLogs/{auditId}` stores `adminUid`, `targetUid`, `action` (`review_profile`), `reason` (1–500 characters), `previousStatus` (`pending`), `newStatus` (`approved` or `rejected`), and `createdAt`. Use a new Firestore auto-ID and save it as the profile's `lastAuditId`. The profile update and audit creation must commit together. Only the admin can read the audit reason. The account holder sees the decision on their own profile.
 
 Browse uses bounded pages of open listings. Clients filter elapsed deadlines and locally rank nearby results. Server time governs eligibility to write. Providers query their own listings and read requests under those listings. Organizations find their requests with a requests collection-group query constrained to their own organizationUid. Enable explicit collection-group Rules for that query while restricting writes to the documented listing path. They can fetch a historical listing by ID when their own request exists. Add the indexes required by the actual queries and test allowed and denied reads with Rules. Query results must satisfy authorization without relying on client filtering. In-app updates derive from authorized listing and request changes.

@@ -16,11 +16,13 @@ This plan starts with the existing Expo Android and React web templates. Replace
 |---|---|---|
 | 1 | Build donor sign-in, profile form, and verification status screen. | Pending |
 | 2 | Build organization sign-in, profile form, and verification status screen. | Pending |
-| 3 | Configure Firebase Spark and email/password sign-in. Protect roles and verification in Firestore Rules. | Pending |
+| 3 | Configure Firebase Spark and email/password sign-in. Protect roles and verification in Firestore Rules. | Done |
 | 4 | Build admin sign-in, the verification queue, and approve/reject actions with audit history. | Pending |
 | 5 | Build shared location and camera permission handling. Check permission prompts on Android. | Pending |
 
 **Ready when** the admin can approve a demo donor and organization, and pending users cannot publish or request food.
+
+Member 3 completed the Phase 1 Firebase foundation. The Auth emulator test, all eight Firestore rules tests, and both apps' code checks pass. The tested rules are deployed, Email/Password is enabled, the default database is available in asia-south1, and the first admin claim is verified. Members 1, 2 and 4 can connect their screens to the sign-in, submission and review helpers documented in the Firebase README. The complete screen-to-screen flow is checked when those screens are integrated.
 
 ## Phase 2 — Post and discover donations
 

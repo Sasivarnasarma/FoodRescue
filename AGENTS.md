@@ -24,7 +24,7 @@ These are settled decisions. Do not silently replace them.
 | Pickup verification | Recipient QR reference and signed-in confirmation, followed by donor completion |
 | Assignment demo | Two Android phones use the same Firebase project with a separate admin web client |
 | Navigation | Expo Router is the proposed default; confirm current project setup before adding it |
-| Package manager | pnpm for both apps, with a lockfile in each app directory |
+| Package manager | One pnpm workspace for mobile, admin and Firebase tooling, with a root lockfile |
 
 ## 3. Rules for implementation
 1. Preserve the approved stack and product scope unless the project owner explicitly approves a change.
@@ -52,7 +52,7 @@ Before implementation:
 - Identify any missing product decision rather than guessing.
 
 During implementation:
-- Run package commands with pnpm from the app directory. Use `pnpm exec expo install` for Expo SDK packages and commit each app's `pnpm-lock.yaml`.
+- Run `pnpm install --frozen-lockfile` from the repository root. Use `pnpm --filter <package-name>` or `pnpm --dir <folder>` for package-specific commands and `pnpm exec expo install` from mobile for Expo SDK packages. Commit the shared root `pnpm-lock.yaml`. Keep workspace settings and dependency build permissions in the root `pnpm-workspace.yaml`.
 - Follow existing naming, formatting, and architecture conventions.
 - Keep components focused and avoid unnecessary dependencies.
 - Add or update tests for meaningful logic.
@@ -83,3 +83,12 @@ A feature is not complete merely because its screen renders. It should have:
 - Keep the title under 70 characters.
 - Leave a blank line after the title, then summarize the changes in bullets starting with `- `.
 - Omit co-author trailers.
+
+## 7. Branching and merging
+
+- Create a branch from the current `main` before starting each piece of work.
+- Use `feature/<description>` for features, `fix/<description>` for fixes, and `docs/<description>` for documentation.
+- Write descriptions in lowercase with hyphens between words. Describe the work without phase numbers or member identifiers.
+- Commit changes on the working branch and run the required checks before merging into `main`.
+- Merge the completed branch into `main` when the user authorizes the merge.
+- Push branches or commits to GitHub only when the user explicitly asks.

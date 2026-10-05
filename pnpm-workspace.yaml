@@ -1,0 +1,8 @@
+packages:
+  - mobile
+  - admin
+  - firebase
+
+allowBuilds:
+  '@firebase/util': false
+  protobufjs: false

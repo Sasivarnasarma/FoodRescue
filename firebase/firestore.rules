@@ -1,23 +1,87 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    function signedIn() {
-      return request.auth != null;
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
     }
 
     function isAdmin() {
-      return signedIn() && request.auth.token.admin == true;
+      return request.auth != null && request.auth.token.get('admin', false) == true;
     }
 
-    function isOwner(uid) {
-      return signedIn() && request.auth.uid == uid;
+    function userPath(uid) {
+      return /databases/$(database)/documents/users/$(uid);
     }
 
-    // Safe starter: explicitly deny client access until collection-specific
-    // policies have been reviewed and tested. Replace these rules incrementally.
-    match /{document=**} {
-      allow read, write: if false;
+    function profilePath(uid) {
+      return /databases/$(database)/documents/profiles/$(uid);
+    }
+
+    function auditPath(id) {
+      return /databases/$(database)/documents/adminAuditLogs/$(id);
+    }
+
+    function exactFields(data, fields) {
+      return data.keys().hasAll(fields) && data.keys().hasOnly(fields);
+    }
+
+    function validText(value, max) {
+      return value is string && value.size() <= max && value.matches('.*\\S.*');
+    }
+
+    function validReview(before, after, auditPathValue, uid, auditId) {
+      let audit = getAfter(auditPathValue).data;
+      return !exists(auditPathValue)
+        && before.verificationStatus == 'pending'
+        && after.verificationStatus in ['approved', 'rejected']
+        && after.lastAuditId == auditId
+        && audit.adminUid == request.auth.uid
+        && audit.targetUid == uid
+        && audit.previousStatus == before.verificationStatus
+        && audit.newStatus == after.verificationStatus
+        && audit.action == 'review_profile'
+        && audit.createdAt == request.time;
+    }
+
+    match /users/{uid} {
+      allow get: if isOwner(uid) || isAdmin();
+      allow create: if isOwner(uid)
+        && exactFields(request.resource.data, ['role', 'accountStatus', 'displayName', 'createdAt', 'updatedAt'])
+        && request.resource.data.role in ['provider', 'organization']
+        && request.resource.data.accountStatus == 'active'
+        && validText(request.resource.data.displayName, 80)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+    }
+
+    match /profiles/{uid} {
+      allow get: if isOwner(uid) || isAdmin();
+      allow list: if isAdmin() && request.query.limit <= 50;
+      allow create: if isOwner(uid)
+        && exactFields(request.resource.data, ['name', 'type', 'verificationStatus'])
+        && validText(request.resource.data.name, 120)
+        && request.resource.data.type in ['provider', 'organization']
+        && request.resource.data.verificationStatus == 'pending'
+        && getAfter(userPath(uid)).data.role == request.resource.data.type
+        && getAfter(userPath(uid)).data.accountStatus == 'active';
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['verificationStatus', 'lastAuditId'])
+        && request.resource.data.lastAuditId is string
+        && request.resource.data.lastAuditId.matches('^[A-Za-z0-9]{20}$')
+        && validReview(resource.data, request.resource.data, auditPath(request.resource.data.lastAuditId), uid, request.resource.data.lastAuditId);
+    }
+
+    match /adminAuditLogs/{auditId} {
+      allow get: if isAdmin();
+      allow list: if isAdmin() && request.query.limit <= 50;
+      allow create: if isAdmin() && auditId.matches('^[A-Za-z0-9]{20}$')
+        && exactFields(request.resource.data, ['adminUid', 'targetUid', 'action', 'reason', 'previousStatus', 'newStatus', 'createdAt'])
+        && validText(request.resource.data.reason, 500)
+        && request.resource.data.targetUid is string
+        && request.resource.data.targetUid.matches('^[^/]{1,128}$')
+        && validReview(get(profilePath(request.resource.data.targetUid)).data,
+          getAfter(profilePath(request.resource.data.targetUid)).data,
+          auditPath(auditId), request.resource.data.targetUid, auditId);
     }
   }
 }

@@ -4,6 +4,8 @@
 
 Firebase Auth identifies users. Firestore Rules enforce field allowlists, types, ownership, role, account status, verification, and transitions. Treat all client input, scores, locations and photos as untrusted. Deny access by default. Grant admin custom claims through an authorized local operator using credentials kept outside both apps and Git. Review actions require a matching immutable audit in the same write.
 
+Phase 1 implements account creation, private account and profile reads, and admin review. Owners can create a matching account and pending profile in a single transaction. Roles and account status cannot be changed by either client. Review is a one-time transition from pending to approved or rejected. Admin queue and audit queries must use a limit of 50 or less. Donation, request, and photo permissions will be added with their respective features.
+
 ## 2. Access
 
 | Data or action | Allowed actor |

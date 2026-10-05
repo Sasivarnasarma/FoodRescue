@@ -2,7 +2,11 @@
 
 ## 1. Firebase
 
+Both clients use the Firebase JavaScript SDK. Copy the shared Firebase Web registration configuration into the Git-ignored root `.env` using the root `.env.example` template. During development, both clients can use one Web registration in the same Spark project. Firebase CLI is needed for emulator and deployment tasks and can be run with `pnpm dlx firebase-tools`. Firebase Hosting can serve the admin build when it is ready for deployment.
+
 Spark MVP uses client Authentication (email/password) and Firestore with reviewed Rules. No custom API server, deployed Functions, scheduled jobs, paid Firebase services, or SMS authentication. Local Admin SDK is reserved for an authorized operator's admin-claim bootstrap, never mobile/browser code. Confirm the actual Firebase project and region before configuring the clients.
+
+The admin production build optionally starts Firebase Analytics in supported browsers when the shared `EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID` is set. Expo Go uses Auth and Firestore. Keep donation records and account details out of Analytics events.
 
 Storage remains the approved future file service but hosted Storage is unavailable under the no-billing decision; listing photo uploads use Firestore bytes instead. Official requirements and sources are recorded in document 15. Use local emulators for development; emulator demonstrations must not be described as deployed cloud features.
 
