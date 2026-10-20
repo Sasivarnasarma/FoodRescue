@@ -3,6 +3,7 @@ import { SymbolView } from 'expo-symbols';
 import { Platform, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { DevicePermissionCards } from '@/components/device-permission-cards';
 import { ExternalLink } from '@/components/external-link';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -64,6 +65,9 @@ export default function TabTwoScreen() {
         </ThemedView>
 
         <ThemedView style={styles.sectionsWrapper}>
+          <ThemedText type="smallBold">Device permissions</ThemedText>
+          <DevicePermissionCards />
+
           <Collapsible title="File-based routing">
             <ThemedText type="small">
               This app has two screens:{' '}

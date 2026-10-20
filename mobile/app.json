@@ -26,6 +26,8 @@
     },
     "plugins": [
       "expo-router",
+      ["expo-camera", { "recordAudioAndroid": false }],
+      "expo-location",
       [
         "expo-splash-screen",
         {
