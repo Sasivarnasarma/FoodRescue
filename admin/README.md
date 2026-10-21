@@ -29,19 +29,10 @@ claim to the reviewer through the local provisioning script. See the
 [Firebase setup](../firebase/README.md) for instructions. The admin app uses the
 same project and Phase 1 Firestore Rules as the Android app.
 
-1. Start the admin app and sign in with the claimed admin account. Reload the
-   page to check session restoration. Signing in with a donor or organization
-   account should show an access error.
-2. Submit two synthetic profiles from Android: one donor and one recipient
-   organization. Both should appear in **Pending profiles** without reloading.
-3. Approve one and reject the other. Enter a reason for each decision and
-   confirm. Both profiles should leave the queue, and each decision should
-   appear in **Review history** with the profile UID, reviewer UID, reason and
-   timestamp. Check the matching statuses on Android.
-4. Disconnect the browser from the network. Review controls should be disabled
-   until the queue reconnects. If another admin has already reviewed a profile,
-   the open dialog should stop accepting a decision.
-5. Sign out and confirm the queue and history are no longer visible.
+1. Sign in with the claimed admin account. Donor and organization accounts must be denied console access.
+2. Open **All profiles**. Use Next and Previous to browse pages of 50. Open **View details** to inspect all stored profile and account fields.
+3. Approve any profile without a reason. Reject any profile with a nonblank reason. Repeat both actions and verify each creates a new history record with the actual previous state.
+4. Keep Android open while reviewing. Verify the status and latest rejection reason update without refreshing, and approval clears the reason.
+5. Disconnect the browser. Review controls must be disabled until current server records return. Sign out and confirm the directory and history disappear.
 
-The queue shows up to 50 pending profiles. As profiles are reviewed, additional
-pending profiles can appear. The history shows up to 50 recent decisions.
+Deploy the changed Firestore rules before testing against the live project. See the Firebase README for deployment instructions.

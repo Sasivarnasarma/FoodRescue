@@ -6,15 +6,16 @@ import {
   query,
   runTransaction,
   serverTimestamp,
-  where,
+  startAfter,
 } from 'firebase/firestore';
 import { getFirebaseClients } from './firebase';
 
-export function pendingProfilesQuery() {
+export function profilesQuery(cursor?: string) {
   const { db } = getFirebaseClients();
   return query(
     collection(db, 'profiles'),
-    where('verificationStatus', '==', 'pending'),
+    orderBy('__name__'),
+    ...(cursor ? [startAfter(cursor)] : []),
     limit(50),
   );
 }
@@ -39,7 +40,7 @@ export async function reviewProfile(
   if (!adminUid) throw new Error('Sign in before reviewing a profile.');
 
   const cleanReason = reason.trim();
-  if (!cleanReason || cleanReason.length > 500) {
+  if ((decision === 'rejected' && !cleanReason) || cleanReason.length > 500) {
     throw new Error('Enter a review reason up to 500 characters.');
   }
 
@@ -47,19 +48,20 @@ export async function reviewProfile(
   const auditRef = doc(collection(db, 'adminAuditLogs'));
   await runTransaction(db, async (transaction) => {
     const profile = await transaction.get(profileRef);
-    if (profile.data()?.verificationStatus !== 'pending') {
-      throw new Error('This profile is no longer pending.');
+    if (!profile.exists()) {
+      throw new Error('This profile no longer exists.');
     }
     transaction.update(profileRef, {
       verificationStatus: decision,
       lastAuditId: auditRef.id,
+      rejectionReason: decision === 'rejected' ? cleanReason : '',
     });
     transaction.set(auditRef, {
       action: 'review_profile',
       adminUid,
       targetUid,
       reason: cleanReason,
-      previousStatus: 'pending',
+      previousStatus: profile.data()!.verificationStatus,
       newStatus: decision,
       createdAt: serverTimestamp(),
     });

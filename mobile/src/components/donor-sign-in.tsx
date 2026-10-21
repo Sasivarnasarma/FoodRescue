@@ -48,7 +48,7 @@ export function DonorSignIn() {
   return (
     <View style={styles.form}>
       <Text accessibilityRole="header" style={styles.title}>
-        {creating ? 'Create donor account' : 'Donor sign-in'}
+        {creating ? 'Create account' : 'Sign in'}
       </Text>
       <AccountField
         label="Email address"
@@ -76,9 +76,7 @@ export function DonorSignIn() {
         onPress={submit}
       />
       <AccountButton
-        label={
-          creating ? 'I already have an account' : 'Create a donor account'
-        }
+        label={creating ? 'I already have an account' : 'Create an account'}
         secondary
         disabled={busy}
         onPress={() => {

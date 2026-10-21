@@ -53,7 +53,7 @@ function reviewWrites(db, uid, decision, overrides = {}) {
   return {
     profileRef,
     auditRef,
-    update: { verificationStatus: decision, lastAuditId: auditRef.id },
+    update: { verificationStatus: decision, lastAuditId: auditRef.id, rejectionReason: decision === 'rejected' ? (overrides.reason ?? 'Synthetic profile checked') : '' },
     audit: {
       adminUid: 'reviewer',
       targetUid: uid,
@@ -76,8 +76,8 @@ function review(db, uid, decision, overrides) {
   );
   return runTransaction(db, async (transaction) => {
     const snapshot = await transaction.get(profileRef);
-    if (snapshot.data()?.verificationStatus !== 'pending')
-      throw new Error('Profile no longer pending');
+    if (!snapshot.exists()) throw new Error('Missing profile');
+    audit.previousStatus = snapshot.data().verificationStatus;
     transaction.update(profileRef, update);
     transaction.set(auditRef, audit);
   });
@@ -179,28 +179,25 @@ test('rejects missing, detached, forged, or mismatched audits', async () => {
     { adminUid: 'someone' },
     { newStatus: 'rejected' },
     { targetUid: 'other' },
-    { reason: '   ' },
+
   ]) {
     await assertFails(review(db, 'donor', 'approved', overrides));
   }
   await assertFails(review(applicant('donor'), 'donor', 'approved'));
 });
 
-test('competing reviews leave one decision and one audit', async () => {
-  await assertSucceeds(submit(applicant('donor'), 'donor'));
+test('competing reviews keep each successful decision linked to its audit', async () => {
+  await submit(applicant('donor'), 'donor');
   const results = await Promise.allSettled([
-    review(admin(), 'donor', 'approved'),
-    review(admin(), 'donor', 'rejected'),
+    review(admin(), 'donor', 'approved'), review(admin(), 'donor', 'rejected'),
   ]);
-  assert.equal(
-    results.filter(({ status }) => status === 'fulfilled').length,
-    1,
-  );
-  assert.equal(
-    (await getDocs(query(collection(admin(), 'adminAuditLogs'), limit(50))))
-      .size,
-    1,
-  );
+  const committed = results.filter(result => result.status === 'fulfilled').length;
+  assert.ok(committed >= 1);
+  const audits = await getDocs(query(collection(admin(), 'adminAuditLogs'), limit(50)));
+  assert.equal(audits.size, committed);
+  const current = (await getDoc(doc(admin(), 'profiles', 'donor'))).data();
+  const latest = (await getDoc(doc(admin(), 'adminAuditLogs', current.lastAuditId))).data();
+  assert.equal(latest.newStatus, current.verificationStatus);
 });
 
 test('future donation collections remain closed', async () => {
@@ -223,3 +220,16 @@ test('account creation and profiles reject cross-user and incomplete writes', as
   );
   await assertFails(deleteDoc(doc(db, 'profiles', 'donor')));
 });
+
+ test('repeat decisions publish only the latest rejection reason to its owner', async () => {
+  const owner = applicant('donor');
+  await submit(owner, 'donor');
+  await assertFails(review(admin(), 'donor', 'rejected', { reason: '' }));
+  await assertFails(review(admin(), 'donor', 'rejected', { reason: '   ' }));
+  await assertSucceeds(review(admin(), 'donor', 'approved', { reason: '' }));
+  await assertSucceeds(review(admin(), 'donor', 'rejected', { reason: 'Please confirm business details.' }));
+  assert.equal((await getDoc(doc(owner, 'profiles', 'donor'))).data().rejectionReason, 'Please confirm business details.');
+  await assertFails(getDoc(doc(applicant('other'), 'profiles', 'donor')));
+  await assertSucceeds(review(admin(), 'donor', 'approved', { reason: '' }));
+  assert.equal((await getDoc(doc(owner, 'profiles', 'donor'))).data().rejectionReason, '');
+ });

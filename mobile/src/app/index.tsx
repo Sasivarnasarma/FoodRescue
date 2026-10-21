@@ -18,7 +18,7 @@ import {
   accountErrorMessage,
   donorColors,
 } from '@/components/donor-controls';
-import { DonorProfile } from '@/components/donor-profile';
+import { AccountProfile } from '@/components/account-profile';
 import { DonorSignIn } from '@/components/donor-sign-in';
 import { watchSession } from '@/lib/auth';
 import { hasFirebaseConfig } from '@/lib/firebase';
@@ -28,9 +28,6 @@ export default function HomeScreen() {
   const [sessionError, setSessionError] = useState('');
   const [attempt, setAttempt] = useState(0);
   const sitemap = useSitemap();
-  const organization = sitemap?.children.find(
-    (screen) => screen.href === '/organization',
-  );
   const devicePermissions = sitemap?.children.find(
     (screen) => screen.href === '/device-permissions',
   );
@@ -70,7 +67,7 @@ export default function HomeScreen() {
                 FoodRescue
               </Text>
               <Text style={styles.description}>
-                Give surplus food to verified organizations near you.
+                Share food. Support your community.
               </Text>
             </View>
             <View style={styles.card}>
@@ -98,17 +95,12 @@ export default function HomeScreen() {
                   </Text>
                 </View>
               ) : user ? (
-                <DonorProfile key={user.uid} user={user} />
+                <AccountProfile key={user.uid} user={user} />
               ) : (
                 <DonorSignIn />
               )}
             </View>
-            {!!organization && (
-              <Link href={organization.href as Href} style={styles.link}>
-                Recipient organization
-              </Link>
-            )}
-            {!!devicePermissions && (
+            {!!user && !!devicePermissions && (
               <Link href={devicePermissions.href as Href} style={styles.link}>
                 Device permissions
               </Link>

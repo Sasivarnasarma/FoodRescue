@@ -14,13 +14,11 @@ import {
   type DocumentData,
   type Query,
 } from 'firebase/firestore';
-import { type ReactNode, useEffect, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useState } from 'react';
 import { useOnline } from '../hooks/use-online';
 import { firebaseErrorMessage } from '../lib/error-message';
-import {
-  pendingProfilesQuery,
-  profileReviewHistoryQuery,
-} from '../lib/verification';
+import { profilesQuery, profileReviewHistoryQuery } from '../lib/verification';
+import ProfileDetails from './ProfileDetails';
 import ReviewDialog, {
   type Decision,
   type PendingProfile,
@@ -36,8 +34,13 @@ type LiveList =
     };
 
 function useLiveList(createQuery: () => Query, attempt: number) {
-  const [state, setState] = useState<{ attempt: number; list: LiveList }>({
+  const [state, setState] = useState<{
+    attempt: number;
+    source: () => Query;
+    list: LiveList;
+  }>({
     attempt,
+    source: createQuery,
     list: { status: 'loading' },
   });
 
@@ -45,6 +48,7 @@ function useLiveList(createQuery: () => Query, attempt: number) {
     function onError(cause: unknown) {
       setState({
         attempt,
+        source: createQuery,
         list: {
           status: 'error',
           message: firebaseErrorMessage(
@@ -62,6 +66,7 @@ function useLiveList(createQuery: () => Query, attempt: number) {
         (snapshot) => {
           setState({
             attempt,
+            source: createQuery,
             list: {
               status: 'ready',
               rows: snapshot.docs.map((record) => ({
@@ -81,7 +86,7 @@ function useLiveList(createQuery: () => Query, attempt: number) {
     }
   }, [createQuery, attempt]);
 
-  return state.attempt === attempt
+  return state.attempt === attempt && state.source === createQuery
     ? state.list
     : ({ status: 'loading' } as const);
 }
@@ -161,7 +166,11 @@ export default function ReviewConsole({ canReview }: { canReview: boolean }) {
   } | null>(null);
   const [notice, setNotice] = useState('');
 
-  const queue = useLiveList(pendingProfilesQuery, queueAttempt);
+  const [details, setDetails] = useState<string | null>(null);
+  const [pages, setPages] = useState<string[]>([]);
+  const cursor = pages[pages.length - 1];
+  const directoryQuery = useCallback(() => profilesQuery(cursor), [cursor]);
+  const queue = useLiveList(directoryQuery, queueAttempt);
   const audit = useLiveList(profileReviewHistoryQuery, auditAttempt);
   const queueCurrent = queue.status === 'ready' && !queue.cached && online;
   const reviewEnabled = queueCurrent && canReview;
@@ -200,7 +209,7 @@ export default function ReviewConsole({ canReview }: { canReview: boolean }) {
         <Stack spacing={2}>
           <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
             <Typography id="pending-heading" component="h2" variant="h6">
-              Pending profiles
+              All profiles
             </Typography>
             {queueCurrent && (
               <Chip
@@ -214,7 +223,7 @@ export default function ReviewConsole({ canReview }: { canReview: boolean }) {
           <ListState
             list={queue}
             online={online}
-            empty="No profiles are waiting for review."
+            empty="No profiles found."
             onRetry={() => setQueueAttempt((value) => value + 1)}
           >
             {queue.status === 'ready' &&
@@ -257,6 +266,13 @@ export default function ReviewConsole({ canReview }: { canReview: boolean }) {
                       </Typography>
                     </Box>
                     <Stack direction="row" spacing={1}>
+                      <Button onClick={() => setDetails(id)}>
+                        View details
+                      </Button>
+                      <Chip
+                        label={String(data.verificationStatus)}
+                        size="small"
+                      />
                       <Button
                         variant="outlined"
                         color="error"
@@ -285,6 +301,23 @@ export default function ReviewConsole({ canReview }: { canReview: boolean }) {
                 );
               })}
           </ListState>
+          <Stack direction="row" spacing={1}>
+            <Button
+              disabled={!pages.length}
+              onClick={() => setPages(pages.slice(0, -1))}
+            >
+              Previous
+            </Button>
+            <Button
+              disabled={queue.status !== 'ready' || queue.rows.length < 50}
+              onClick={() => {
+                if (queue.status === 'ready')
+                  setPages([...pages, queue.rows[queue.rows.length - 1].id]);
+              }}
+            >
+              Next
+            </Button>
+          </Stack>
         </Stack>
       </Paper>
       <Paper
@@ -357,6 +390,9 @@ export default function ReviewConsole({ canReview }: { canReview: boolean }) {
           </ListState>
         </Stack>
       </Paper>
+      {details && (
+        <ProfileDetails uid={details} onClose={() => setDetails(null)} />
+      )}
       {selected && (
         <ReviewDialog
           profile={selected.profile}

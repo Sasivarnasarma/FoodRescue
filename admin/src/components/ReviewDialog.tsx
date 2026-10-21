@@ -34,7 +34,9 @@ export default function ReviewDialog({
   const [error, setError] = useState('');
   const verb = decision === 'approved' ? 'Approve' : 'Reject';
   const cleanReason = reason.trim();
-  const validReason = cleanReason.length > 0 && cleanReason.length <= 500;
+  const validReason =
+    (decision === 'approved' || cleanReason.length > 0) &&
+    cleanReason.length <= 500;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -69,8 +71,8 @@ export default function ReviewDialog({
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
             <Typography sx={{ overflowWrap: 'anywhere' }}>
-              {verb} {profile.name} ({profile.role}). Once saved, this decision
-              is final and the reason is recorded in the audit history.
+              {verb} {profile.name} ({profile.role}). This decision is recorded
+              in the audit history.
             </Typography>
             {!available && !pending && (
               <Alert severity="warning">
@@ -79,18 +81,20 @@ export default function ReviewDialog({
               </Alert>
             )}
             {error && <Alert severity="error">{error}</Alert>}
-            <TextField
-              label="Review reason"
-              name="reason"
-              value={reason}
-              onChange={(event) => setReason(event.target.value)}
-              disabled={pending}
-              required
-              fullWidth
-              autoFocus
-              slotProps={{ htmlInput: { maxLength: 500 } }}
-              helperText={`${reason.length}/500 characters`}
-            />
+            {decision === 'rejected' && (
+              <TextField
+                label="Rejection reason"
+                name="reason"
+                value={reason}
+                onChange={(event) => setReason(event.target.value)}
+                disabled={pending}
+                required
+                fullWidth
+                autoFocus
+                slotProps={{ htmlInput: { maxLength: 500 } }}
+                helperText={`${reason.length}/500 characters`}
+              />
+            )}
           </Stack>
         </DialogContent>
         <DialogActions>

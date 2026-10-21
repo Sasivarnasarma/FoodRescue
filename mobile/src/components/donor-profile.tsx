@@ -180,6 +180,13 @@ export function DonorProfile({ user }: { user: User }) {
           {statusCopy[status].title}
         </Text>
         <Text style={styles.body}>{statusCopy[status].description}</Text>
+        {status === 'rejected' && (
+          <Text style={styles.body}>
+            <Text style={{ fontWeight: 'bold' }}>Rejection reason: </Text>
+            {profile.data.rejectionReason ||
+              'No reason was recorded for this earlier decision.'}
+          </Text>
+        )}
       </View>
     );
   }

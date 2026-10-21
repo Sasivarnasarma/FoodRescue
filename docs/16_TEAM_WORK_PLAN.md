@@ -14,15 +14,17 @@ This plan starts with the existing Expo Android and React web templates. Replace
 
 | Member | Work | Status |
 |---|---|---|
-| 1 | Build donor sign-in, profile form, and verification status screen. | Pending |
-| 2 | Build organization sign-in, profile form, and verification status screen. | Pending |
+| 1 | Build donor sign-in, profile form, and verification status screen. | Done |
+| 2 | Build organization sign-in, profile form, and verification status screen. | Done |
 | 3 | Configure Firebase Spark and email/password sign-in. Protect roles and verification in Firestore Rules. | Done |
-| 4 | Build admin sign-in, the verification queue, and approve/reject actions with audit history. | Pending |
-| 5 | Build shared location and camera permission handling. Check permission prompts on Android. | Pending |
+| 4 | Build admin sign-in, the verification queue, and approve/reject actions with audit history. | Done |
+| 5 | Build shared location and camera permission handling. | Done |
 
 **Ready when** the admin can approve a demo donor and organization, and pending users cannot publish or request food.
 
-Member 3 completed the Phase 1 Firebase foundation. The Auth emulator test, all eight Firestore rules tests, and both apps' code checks pass. The tested rules are deployed, Email/Password is enabled, the default database is available in asia-south1, and the first admin claim is verified. Members 1, 2 and 4 can connect their screens to the sign-in, submission and review helpers documented in the Firebase README. The complete screen-to-screen flow is checked when those screens are integrated.
+Phase 1 implementation is merged. The donor and organization screens use the shared Firebase project, and the admin app reviews submissions through Firestore. The Firebase Auth emulator test and all eight Firestore rules tests passed. Email/Password is enabled, the tested rules are deployed, and the first admin claim is verified.
+
+**Manual verification pending:** Submit a test donor and organization profile from Android, review both in the admin browser, and confirm that their status updates without a refresh. On a physical Android phone, check the location and camera prompts, denial handling, and updates after returning from Settings.
 
 ## Phase 2 — Post and discover donations
 

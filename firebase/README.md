@@ -2,7 +2,7 @@
 
 This folder contains starter security/configuration files. They are not a complete production deployment.
 
-Phase 1 status is verified on 2026-11-14. The Authentication emulator test and all eight Firestore rules tests pass. The Phase 1 rules have been compiled and deployed to the configured project. Email/Password is enabled, the default Firestore database is available in asia-south1, and the first admin claim has been verified. The remaining UI integration belongs to the donor, organization and admin screen tasks.
+The Firebase foundation is configured with Email/Password sign-in, a default Firestore database in asia-south1, and a verified first admin claim. The account-management rules add repeat reviews and applicant-visible rejection reasons. All nine updated rules tests pass locally. Deploy these updated rules before using the new review flow against the live project.
 
 Firebase tooling is a package in the root pnpm workspace. Install from the repository root and commit the shared root lockfile.
 
@@ -31,11 +31,11 @@ For the first admin, create an Email/Password user in Firebase Authentication an
 pnpm --dir firebase admin:grant YOUR_PROJECT_ID EXISTING_AUTH_UID
 ```
 
-Have the admin sign out and back in after the claim is assigned. The mobile helper in `mobile/src/lib/verification.ts` submits a pending profile and watches the decision. The admin helper in `admin/src/lib/verification.ts` provides the pending queue query and commits a review with its audit record. Use synthetic accounts for the end-to-end check once the screens are connected.
+Have the admin sign out and back in after the claim is assigned. The mobile helper in `mobile/src/lib/verification.ts` submits a pending profile and watches the decision. The admin helper in `admin/src/lib/verification.ts` provides the paginated profile directory query and commits a review with its audit record. Use synthetic accounts for the end-to-end check once the screens are connected.
 
 For Members 1 and 2, `mobile/src/lib/auth.ts` exposes `createAccount`, `signInAccount`, `signOutAccount` and `watchSession`. After account creation, call `submitProfile`. If submission fails after Auth signup, allow the signed-in user to retry profile submission. Android sessions persist through AsyncStorage. Unsubscribe session and verification listeners when screens unmount or the user signs out.
 
-For Member 4, use `admin/src/lib/auth.ts` for claim-checked admin sign-in. Listen to `pendingProfilesQuery()` and `profileReviewHistoryQuery()` for the queue and recent audit records. `reviewProfile()` commits the decision and audit together and rejects an already reviewed profile.
+For Member 4, use `admin/src/lib/auth.ts` for claim-checked admin sign-in. Listen to `profilesQuery(cursor?)` and `profileReviewHistoryQuery()` for the queue and recent audit records. `reviewProfile()` commits the decision and audit together and supports repeating decisions in any verification state. Rejection requires a reason. Approval accepts an empty reason. Each transaction sets the current public rejection reason and links a new immutable audit record.
 
 Before deployment:
 

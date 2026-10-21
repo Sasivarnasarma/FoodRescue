@@ -2,7 +2,7 @@
 
 Standalone Android builds use the package ID `com.mit.foodrescue`. Expo Go uses the Firebase JavaScript SDK with the Web app SDK configuration in the repository root `.env`. Keep the native `google-services.json` with the Android registration for future native Firebase integrations.
 
-Expo SDK 57 with Expo Router, TypeScript, Expo UI and Reanimated. This app is part of the root pnpm workspace and uses the shared root lockfile. Use Node.js 22.20.0 and pnpm 11.7.0.
+Expo SDK 58 with Expo Router, TypeScript, Expo UI and Reanimated. This app is part of the root pnpm workspace and uses the shared root lockfile. Use Node.js 22.20.0 and pnpm 11.7.0.
 
 From the root of FoodRescue:
 

@@ -4,7 +4,12 @@ export type AccountSnapshot = {
 };
 
 export type ProfileSnapshot = {
-  data: { type?: unknown; name?: unknown; verificationStatus?: unknown } | null;
+  data: {
+    type?: unknown;
+    name?: unknown;
+    rejectionReason?: unknown;
+    verificationStatus?: unknown;
+  } | null;
   confirmed: boolean;
 };
 

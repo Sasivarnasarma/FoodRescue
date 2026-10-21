@@ -41,3 +41,9 @@ QR lookup identifies the listing. Authentication, assignment and Firestore Secur
 | Open or assigned → expired | At deadline, donor or admin can reconcile the listing. Assigned recipient can also reconcile its own overdue assignment. An assigned request expires in the same write |
 
 If an assigned recipient cancels before the deadline with less than 15 minutes remaining, close the listing as cancelled and clear the assignment. An organization may withdraw its own pending request before approval. Closed listings cannot reopen. Foreground reconciliation is optional for timely display. Clients hide elapsed listings and Rules reject late requests, approval and pickup even if the stored status is stale.
+
+## Account management
+
+Everyone starts at the same sign-in screen. Creating an account leads to a donor or recipient organization choice, followed by the matching profile form. The first profile submission fixes the account role. Returning users open their saved role automatically. Interrupted registrations resume role selection after signing in.
+
+Admins browse all profiles, open full stored profile and account details, and approve or reject anytime. Only rejection needs a reason. Each action creates an immutable audit. Applicants see their latest rejection reason on mobile. Older rejected profiles without a public reason show a fallback message. Approval clears the public reason.

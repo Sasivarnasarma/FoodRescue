@@ -6,6 +6,7 @@ import {
   TabTriggerSlotProps,
   TabListProps,
 } from 'expo-router/ui';
+import type { ComponentProps } from 'react';
 import { SymbolView } from 'expo-symbols';
 import { Pressable, useColorScheme, View, StyleSheet } from 'react-native';
 
@@ -40,7 +41,8 @@ export function TabButton({
   children,
   isFocused,
   ...props
-}: TabTriggerSlotProps) {
+}: Omit<TabTriggerSlotProps, 'ref'> &
+  Pick<ComponentProps<typeof Pressable>, 'ref'>) {
   return (
     <Pressable {...props} style={({ pressed }) => pressed && styles.pressed}>
       <ThemedView
@@ -60,7 +62,7 @@ export function TabButton({
 
 export function CustomTabList(props: TabListProps) {
   const scheme = useColorScheme();
-  const colors = Colors[scheme === 'unspecified' ? 'light' : scheme];
+  const colors = Colors[scheme ?? 'light'];
 
   return (
     <View {...props} style={styles.tabListContainer}>

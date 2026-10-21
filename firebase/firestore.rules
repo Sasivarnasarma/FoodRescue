@@ -32,9 +32,11 @@ service cloud.firestore {
     function validReview(before, after, auditPathValue, uid, auditId) {
       let audit = getAfter(auditPathValue).data;
       return !exists(auditPathValue)
-        && before.verificationStatus == 'pending'
+        && before.verificationStatus in ['pending', 'approved', 'rejected']
         && after.verificationStatus in ['approved', 'rejected']
         && after.lastAuditId == auditId
+        && after.rejectionReason == (after.verificationStatus == 'rejected' ? audit.reason : '')
+        && (after.verificationStatus != 'rejected' || validText(audit.reason, 500))
         && audit.adminUid == request.auth.uid
         && audit.targetUid == uid
         && audit.previousStatus == before.verificationStatus
@@ -65,7 +67,7 @@ service cloud.firestore {
         && getAfter(userPath(uid)).data.role == request.resource.data.type
         && getAfter(userPath(uid)).data.accountStatus == 'active';
       allow update: if isAdmin()
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['verificationStatus', 'lastAuditId'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['verificationStatus', 'lastAuditId', 'rejectionReason'])
         && request.resource.data.lastAuditId is string
         && request.resource.data.lastAuditId.matches('^[A-Za-z0-9]{20}$')
         && validReview(resource.data, request.resource.data, auditPath(request.resource.data.lastAuditId), uid, request.resource.data.lastAuditId);
@@ -76,7 +78,8 @@ service cloud.firestore {
       allow list: if isAdmin() && request.query.limit <= 50;
       allow create: if isAdmin() && auditId.matches('^[A-Za-z0-9]{20}$')
         && exactFields(request.resource.data, ['adminUid', 'targetUid', 'action', 'reason', 'previousStatus', 'newStatus', 'createdAt'])
-        && validText(request.resource.data.reason, 500)
+        && request.resource.data.reason is string
+        && request.resource.data.reason.size() <= 500
         && request.resource.data.targetUid is string
         && request.resource.data.targetUid.matches('^[^/]{1,128}$')
         && validReview(get(profilePath(request.resource.data.targetUid)).data,

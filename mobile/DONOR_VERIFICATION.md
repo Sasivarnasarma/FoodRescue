@@ -5,7 +5,7 @@ Use synthetic accounts. Put the Firebase client configuration in this checkout's
 Email/Password authentication and the Phase 1 Firestore rules must be enabled.
 Use the provisioned account in the separate admin web app to review submissions.
 
-1. Open FoodRescue and choose **Create a donor account**. Create one with a unique
+1. Open FoodRescue and choose **Create an account**. Create one with a unique
    synthetic email, then submit a display name and business name. The profile
    should show **Pending review**.
 2. Reload the app on Android. Verify that the signed-in account and pending status
@@ -16,8 +16,10 @@ Use the provisioned account in the separate admin web app to review submissions.
 4. Check invalid credentials, then disable the network and retry sign-in. The form
    should give an error and remain usable. A signed-in profile can show cached
    information while it waits for the server. Reconnect and verify that it updates.
-5. Sign in with an existing organization account. The donor screen should direct
-   you to the organization flow once its branch is integrated, and will never
+5. Sign in with an existing organization account. The shared home screen should open
+   the organization flow automatically, and will never
    submit a donor profile over an organization profile.
 
 The automated authorization checks can be run independently with `pnpm test:rules`.
+
+Check shared sign-in routes returning accounts to their saved role. Reject, approve and reject again. Confirm Android shows the latest rejection reason.
