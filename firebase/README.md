@@ -47,3 +47,11 @@ Before deployment:
 6. Confirm Spark quotas and region. Deploy reviewed Firestore rules and indexes, including the listing photo size and access rules and the bytes indexing exemption. Keep the hosted Storage bucket disabled.
 
 Never commit service-account keys or private credentials.
+
+## Phase 2 listing data contract
+
+Listing and photo rules, indexes and client helpers are implemented. Deploy both rules and indexes before cloud integration. New indexes may need time to build.
+
+Use `mobile/src/lib/listings.ts` for draft creation/update, publishing, cancellation, primary photo upload/removal and reads. Subscription callbacks receive `(listings, page)` where `page` contains `fromCache`, `hasPendingWrites` and `nextCursor`. Pass `{ after: page.nextCursor }` as the final options argument for the next bounded page. Keep cursors scoped to the same query. Unsubscribe when the screen closes. Discovery excludes past deadlines before applying the limit, refreshes its moving bound every 30 seconds, and donor pages order by creation time. Missing draft coordinates and pickup dates are `undefined`, not fake coordinates or dates. Show cached results as stale and wait for write promises before reporting success.
+
+Manual integration check: publish without a photo on donor phone A, verify live appearance on approved organization phone B, open details, and repeat with a compressed photo. Verify pagination, offline/cache labels, denied reads for pending applicants and revoked donor write access. Physical two-phone verification and live deployment remain separate integration steps.

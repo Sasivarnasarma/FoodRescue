@@ -32,7 +32,7 @@ Phase 1 implementation is merged. The donor and organization screens use the sha
 |---|---|---|
 | 1 | Build the draft and publish screens. Include quantity, storage details, allergens, and the pickup window. | Pending |
 | 2 | Build the nearby donations feed and listing detail. Show distance, deadline, and pickup information. | Pending |
-| 3 | Implement listing and photo access rules. Connect live listing reads to the shared Firebase project. | Pending |
+| 3 | Implement listing and photo access rules. Connect live listing reads to the shared Firebase project. | Done |
 | 4 | Prepare synthetic donor, organization, and listing data. Set up examples for comparing nearby and urgent donations. | Pending |
 | 5 | Add GPS, manual location entry, maps directions, and camera/gallery selection. Compress optional photos to the 150 KiB limit and connect the preview to the donor form. | Pending |
 

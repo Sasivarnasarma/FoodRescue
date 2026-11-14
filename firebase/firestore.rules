@@ -21,12 +21,73 @@ service cloud.firestore {
       return /databases/$(database)/documents/adminAuditLogs/$(id);
     }
 
+    function listingPath(id) {
+      return /databases/$(database)/documents/foodListings/$(id);
+    }
+
+    function isApprovedProvider(uid) {
+      return request.auth != null && request.auth.uid == uid
+        && exists(userPath(uid)) && exists(profilePath(uid))
+        && get(userPath(uid)).data.role == 'provider'
+        && get(userPath(uid)).data.accountStatus == 'active'
+        && get(profilePath(uid)).data.verificationStatus == 'approved';
+    }
+
+    function isApprovedOrganization(uid) {
+      return request.auth != null && request.auth.uid == uid
+        && exists(userPath(uid)) && exists(profilePath(uid))
+        && get(userPath(uid)).data.role == 'organization'
+        && get(userPath(uid)).data.accountStatus == 'active'
+        && get(profilePath(uid)).data.verificationStatus == 'approved';
+    }
+
     function exactFields(data, fields) {
       return data.keys().hasAll(fields) && data.keys().hasOnly(fields);
     }
 
     function validText(value, max) {
       return value is string && value.size() <= max && value.matches('.*\\S.*');
+    }
+
+    function validListingStatus(status) {
+      return status in ['draft', 'open', 'assigned', 'collected', 'cancelled', 'expired'];
+    }
+
+    function validListingDetails(data) {
+      return validText(data.title, 120)
+        && validText(data.description, 1000)
+        && data.category in ['Bakery', 'Produce', 'Prepared Meals', 'Dairy & Eggs', 'Meat & Poultry', 'Pantry & Dry Goods', 'Beverages', 'Other']
+        && data.quantity is int && data.quantity > 0
+        && data.unit in ['pack', 'portion', 'item', 'g']
+        && data.storageRequirement in ['ambient', 'chilled', 'frozen']
+        && data.storageInstructions is string && data.storageInstructions.size() <= 500
+        && data.allergenInfo is string && data.allergenInfo.size() <= 500
+        && data.allergenDeclaration in ['provided', 'unknown']
+        && validText(data.pickupAddress, 200)
+        && data.pickupLocation is latlng
+        && data.pickupStartsAt is timestamp
+        && data.pickupDeadline is timestamp
+        && data.pickupStartsAt < data.pickupDeadline
+        && (!('useByAt' in data) || (data.useByAt is timestamp && data.pickupDeadline <= data.useByAt))
+        && (!('bestBeforeAt' in data) || data.bestBeforeAt is timestamp)
+        && (!('demoImageKey' in data) || (data.demoImageKey is string && data.demoImageKey.size() <= 100));
+    }
+
+    function isParentListingDraft(id, uid) {
+      return exists(listingPath(id))
+        && getAfter(listingPath(id)).data.providerUid == uid
+        && getAfter(listingPath(id)).data.status == 'draft';
+    }
+
+    function validListingKeys(data) {
+      return data.keys().hasOnly([
+        'providerUid', 'providerName', 'title', 'description', 'category',
+        'quantity', 'unit', 'storageRequirement', 'storageInstructions',
+        'allergenInfo', 'allergenDeclaration', 'pickupAddress', 'pickupLocation',
+        'pickupStartsAt', 'pickupDeadline', 'bestBeforeAt', 'useByAt',
+        'status', 'createdAt',
+        'updatedAt', 'demoImageKey'
+      ]);
     }
 
     function validReview(before, after, auditPathValue, uid, auditId) {
@@ -85,6 +146,84 @@ service cloud.firestore {
         && validReview(get(profilePath(request.resource.data.targetUid)).data,
           getAfter(profilePath(request.resource.data.targetUid)).data,
           auditPath(auditId), request.resource.data.targetUid, auditId);
+    }
+
+    match /foodListings/{listingId} {
+      allow get: if (request.auth != null && resource.data.providerUid == request.auth.uid)
+        || isAdmin()
+        || (resource.data.status == 'open' && isApprovedOrganization(request.auth.uid));
+
+      allow list: if (request.auth != null && resource.data.providerUid == request.auth.uid && request.query.limit <= 50)
+        || (isApprovedOrganization(request.auth.uid) && resource.data.status == 'open' && request.query.limit <= 50)
+        || (isAdmin() && request.query.limit <= 50);
+
+      allow create: if isApprovedProvider(request.auth.uid)
+        && request.resource.data.providerUid == request.auth.uid
+        && request.resource.data.providerName == get(profilePath(request.auth.uid)).data.name
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && validListingKeys(request.resource.data)
+        && (
+          (request.resource.data.status == 'draft'
+            && request.resource.data.keys().hasAll(['providerUid', 'providerName', 'title', 'status', 'createdAt', 'updatedAt'])
+            && validText(request.resource.data.title, 120))
+          ||
+          (request.resource.data.status == 'open'
+            && request.resource.data.keys().hasAll(['providerUid', 'providerName', 'title', 'description', 'category', 'quantity', 'unit', 'storageRequirement', 'storageInstructions', 'allergenInfo', 'allergenDeclaration', 'pickupAddress', 'pickupLocation', 'pickupStartsAt', 'pickupDeadline', 'status', 'createdAt', 'updatedAt'])
+            && validListingDetails(request.resource.data))
+        );
+
+      allow update: if isApprovedProvider(request.auth.uid)
+        && resource.data.providerUid == request.auth.uid
+        && request.resource.data.providerUid == resource.data.providerUid
+        && request.resource.data.providerName == resource.data.providerName
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedAt == request.time
+        && validListingKeys(request.resource.data)
+        && (
+          (resource.data.status == 'draft'
+            && (
+              (request.resource.data.status == 'draft'
+                && validText(request.resource.data.title, 120))
+              ||
+              (request.resource.data.status == 'open'
+                && request.resource.data.keys().hasAll(['providerUid', 'providerName', 'title', 'description', 'category', 'quantity', 'unit', 'storageRequirement', 'storageInstructions', 'allergenInfo', 'allergenDeclaration', 'pickupAddress', 'pickupLocation', 'pickupStartsAt', 'pickupDeadline', 'status', 'createdAt', 'updatedAt'])
+                && validListingDetails(request.resource.data))
+            ))
+          ||
+          (resource.data.status == 'open'
+            && request.resource.data.status == 'cancelled'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']))
+        );
+
+      allow delete: if isApprovedProvider(request.auth.uid)
+        && resource.data.providerUid == request.auth.uid
+        && resource.data.status == 'draft';
+
+      match /photos/{photoId} {
+        allow get: if photoId == 'primary'
+          && exists(listingPath(listingId))
+          && (
+            (request.auth != null && get(listingPath(listingId)).data.providerUid == request.auth.uid)
+            || isAdmin()
+            || (get(listingPath(listingId)).data.status == 'open' && isApprovedOrganization(request.auth.uid))
+          );
+
+        allow list: if false;
+
+        allow create, update: if photoId == 'primary'
+          && isApprovedProvider(request.auth.uid)
+          && isParentListingDraft(listingId, request.auth.uid)
+          && exactFields(request.resource.data, ['jpeg', 'updatedAt'])
+          && request.resource.data.jpeg is bytes
+          && request.resource.data.jpeg.size() > 0
+          && request.resource.data.jpeg.size() <= 153600
+          && request.resource.data.updatedAt == request.time;
+
+        allow delete: if photoId == 'primary'
+          && isApprovedProvider(request.auth.uid)
+          && isParentListingDraft(listingId, request.auth.uid);
+      }
     }
   }
 }
