@@ -4,6 +4,7 @@ import {
   Timestamp,
   collection,
   deleteDoc,
+  deleteField,
   doc,
   getDoc,
   limit,
@@ -63,8 +64,8 @@ export interface FoodListing {
   pickupLocation?: Coordinates;
   pickupStartsAt?: Date;
   pickupDeadline?: Date;
-  bestBeforeAt?: Date;
-  useByAt?: Date;
+  bestBeforeAt?: Date | null;
+  useByAt?: Date | null;
   status: ListingStatus;
   acceptedOrganizationUid?: string;
   createdAt?: Date;
@@ -84,11 +85,11 @@ export interface DraftListingInput {
   allergenInfo?: string;
   allergenDeclaration?: AllergenDeclaration;
   pickupAddress?: string;
-  pickupLocation?: Coordinates;
-  pickupStartsAt?: Date;
-  pickupDeadline?: Date;
-  bestBeforeAt?: Date;
-  useByAt?: Date;
+  pickupLocation?: Coordinates | null;
+  pickupStartsAt?: Date | null;
+  pickupDeadline?: Date | null;
+  bestBeforeAt?: Date | null;
+  useByAt?: Date | null;
   demoImageKey?: string;
 }
 
@@ -106,8 +107,8 @@ export interface PublishListingInput {
   pickupLocation: Coordinates;
   pickupStartsAt: Date;
   pickupDeadline: Date;
-  bestBeforeAt?: Date;
-  useByAt?: Date;
+  bestBeforeAt?: Date | null;
+  useByAt?: Date | null;
   demoImageKey?: string;
 }
 
@@ -315,6 +316,11 @@ export async function updateDraftListing(
   if (input.bestBeforeAt)
     updates.bestBeforeAt = Timestamp.fromDate(input.bestBeforeAt);
   if (input.useByAt) updates.useByAt = Timestamp.fromDate(input.useByAt);
+  if (input.useByAt === null) updates.useByAt = deleteField();
+  if (input.pickupLocation === null) updates.pickupLocation = deleteField();
+  if (input.pickupStartsAt === null) updates.pickupStartsAt = deleteField();
+  if (input.pickupDeadline === null) updates.pickupDeadline = deleteField();
+  if (input.bestBeforeAt === null) updates.bestBeforeAt = deleteField();
   if (input.demoImageKey !== undefined)
     updates.demoImageKey = input.demoImageKey.trim().slice(0, 100);
 
@@ -552,6 +558,33 @@ export function subscribeToProviderListings(
           fromCache: snapshot.metadata.fromCache,
           hasPendingWrites: snapshot.metadata.hasPendingWrites,
           nextCursor: snapshot.docs.length === 50 ? snapshot.docs[49] : null,
+        },
+      );
+    },
+    onError,
+  );
+}
+
+export function subscribeToListing(
+  listingId: string,
+  onUpdate: (
+    listing: FoodListing | null,
+    metadata: Pick<ListingPage, 'fromCache' | 'hasPendingWrites'>,
+  ) => void,
+  onError: (error: Error) => void,
+): Unsubscribe {
+  const { db } = getFirebaseClients();
+  return onSnapshot(
+    doc(db, 'foodListings', listingId),
+    { includeMetadataChanges: true },
+    (snapshot) => {
+      onUpdate(
+        snapshot.exists()
+          ? convertDocToListing(snapshot.id, snapshot.data())
+          : null,
+        {
+          fromCache: snapshot.metadata.fromCache,
+          hasPendingWrites: snapshot.metadata.hasPendingWrites,
         },
       );
     },
