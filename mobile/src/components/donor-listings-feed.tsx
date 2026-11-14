@@ -1,0 +1,483 @@
+import React, { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import {
+  cancelListing,
+  subscribeToProviderListings,
+  type FoodListing,
+  type ListingStatus,
+  type ListingPage,
+  type ListingPageOptions,
+} from '../lib/listings';
+import { getFirebaseClients } from '../lib/firebase';
+
+interface DonorListingsFeedProps {
+  onCreatePress: () => void;
+  onEditDraft: (listing: FoodListing) => void;
+}
+
+export function DonorListingsFeed({
+  onCreatePress,
+  onEditDraft,
+}: DonorListingsFeedProps) {
+  const [page, setPage] = useState<ListingPage>();
+  const [cursors, setCursors] = useState<ListingPageOptions[]>([{}]);
+  const [attempt, setAttempt] = useState(0);
+  const options = cursors[cursors.length - 1];
+  const [listings, setListings] = useState<FoodListing[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    let stop: (() => void) | undefined;
+    Promise.resolve()
+      .then(() => {
+        if (!active) return;
+        setLoading(true);
+        setPage(undefined);
+        const uid = getFirebaseClients().auth.currentUser?.uid;
+        if (!uid) throw new Error('Sign in to view your donations.');
+        stop = subscribeToProviderListings(
+          uid,
+          (items, metadata) => {
+            if (!active) return;
+            setListings(items);
+            setPage(metadata);
+            setErrorMessage(null);
+            setLoading(false);
+          },
+          (error) => {
+            if (!active) return;
+            setErrorMessage(error.message);
+            setListings([]);
+            setLoading(false);
+          },
+          options,
+        );
+      })
+      .catch((cause: unknown) => {
+        if (!active) return;
+        setErrorMessage(
+          cause instanceof Error ? cause.message : 'Could not load listings.',
+        );
+        setLoading(false);
+      });
+    return () => {
+      active = false;
+      stop?.();
+    };
+  }, [options, attempt]);
+
+  const handleCancelListing = (listing: FoodListing) => {
+    Alert.alert(
+      'Cancel Listing?',
+      `Are you sure you want to cancel "${listing.title}"? This cannot be undone.`,
+      [
+        { text: 'Keep Open', style: 'cancel' },
+        {
+          text: 'Yes, Cancel',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setCancellingId(listing.id);
+              await cancelListing(listing.id);
+            } catch (err: unknown) {
+              Alert.alert(
+                'Error',
+                (err instanceof Error ? err.message : '') ||
+                  'Failed to cancel listing.',
+              );
+            } finally {
+              setCancellingId(null);
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const renderStatusBadge = (status: ListingStatus) => {
+    switch (status) {
+      case 'open':
+        return (
+          <View style={[styles.badge, styles.badgeOpen]}>
+            <Text style={[styles.badgeText, styles.badgeOpenText]}>Open</Text>
+          </View>
+        );
+      case 'draft':
+        return (
+          <View style={[styles.badge, styles.badgeDraft]}>
+            <Text style={[styles.badgeText, styles.badgeDraftText]}>Draft</Text>
+          </View>
+        );
+      case 'assigned':
+        return (
+          <View style={[styles.badge, styles.badgeAssigned]}>
+            <Text style={[styles.badgeText, styles.badgeAssignedText]}>
+              Assigned
+            </Text>
+          </View>
+        );
+      case 'collected':
+        return (
+          <View style={[styles.badge, styles.badgeCollected]}>
+            <Text style={[styles.badgeText, styles.badgeCollectedText]}>
+              Collected
+            </Text>
+          </View>
+        );
+      case 'cancelled':
+        return (
+          <View style={[styles.badge, styles.badgeCancelled]}>
+            <Text style={[styles.badgeText, styles.badgeCancelledText]}>
+              Cancelled
+            </Text>
+          </View>
+        );
+      default:
+        return (
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>{status}</Text>
+          </View>
+        );
+    }
+  };
+
+  const renderItem = ({ item }: { item: FoodListing }) => (
+    <View style={styles.card}>
+      <View style={styles.cardHeader}>
+        <Text style={styles.title} numberOfLines={1}>
+          {item.title}
+        </Text>
+        {renderStatusBadge(item.status)}
+      </View>
+
+      <Text style={styles.description} numberOfLines={2}>
+        {item.description || 'No description provided.'}
+      </Text>
+
+      <View style={styles.detailsRow}>
+        <Text style={styles.detailText}>
+          {item.quantity} {item.unit} • {item.storageRequirement}
+        </Text>
+        <Text style={styles.deadlineText}>
+          Until:{' '}
+          {item.pickupDeadline
+            ? item.pickupDeadline.toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit',
+              })
+            : 'Deadline not set'}
+        </Text>
+      </View>
+
+      {item.status === 'draft' && (
+        <TouchableOpacity
+          accessibilityRole="button"
+          disabled={!page || page.fromCache || page.hasPendingWrites}
+          onPress={() => onEditDraft(item)}
+        >
+          <Text style={styles.cancelActionText}>Edit / publish draft</Text>
+        </TouchableOpacity>
+      )}
+      {item.status === 'open' && (
+        <View style={styles.cardActions}>
+          <TouchableOpacity
+            style={styles.cancelActionButton}
+            onPress={() => handleCancelListing(item)}
+            disabled={
+              !!cancellingId || !page || page.fromCache || page.hasPendingWrites
+            }
+          >
+            {cancellingId === item.id ? (
+              <ActivityIndicator size="small" color="#b91c1c" />
+            ) : (
+              <Text style={styles.cancelActionText}>Cancel Listing</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
+  );
+
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#167044" />
+        <Text style={styles.loadingText}>Loading your listings...</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.topBar}>
+        <View>
+          <Text style={styles.feedTitle}>Your Donations</Text>
+          <Text style={styles.feedSubtitle}>
+            Manage your surplus food listings
+          </Text>
+        </View>
+        <TouchableOpacity style={styles.createButton} onPress={onCreatePress}>
+          <Text style={styles.createButtonText}>+ New Offer</Text>
+        </TouchableOpacity>
+      </View>
+
+      {errorMessage ? (
+        <View style={styles.errorBox}>
+          <Text style={styles.errorText}>{errorMessage}</Text>
+        </View>
+      ) : null}
+
+      {page?.fromCache && (
+        <Text>Offline or reconnecting. Saved listings may be out of date.</Text>
+      )}
+      {page?.hasPendingWrites && (
+        <Text>Waiting for the server to confirm changes.</Text>
+      )}
+      {errorMessage && (
+        <TouchableOpacity
+          accessibilityRole="button"
+          onPress={() => setAttempt((v) => v + 1)}
+        >
+          <Text>Retry loading</Text>
+        </TouchableOpacity>
+      )}
+      <View style={styles.listContent}>
+        {listings.map((item) => (
+          <View key={item.id}>{renderItem({ item })}</View>
+        ))}
+        {listings.length === 0 && (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyTitle}>No Donations Posted</Text>
+            <Text style={styles.emptySubtitle}>
+              Create an offer to share surplus food with verified organizations.
+            </Text>
+            <TouchableOpacity style={styles.emptyCta} onPress={onCreatePress}>
+              <Text style={styles.emptyCtaText}>
+                Create Your First Donation
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
+      <TouchableOpacity
+        accessibilityRole="button"
+        disabled={loading || cursors.length === 1}
+        onPress={() => setCursors((v) => v.slice(0, -1))}
+      >
+        <Text>Previous page</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        accessibilityRole="button"
+        disabled={loading || !page?.nextCursor}
+        onPress={() => {
+          if (page?.nextCursor)
+            setCursors((v) => [...v, { after: page.nextCursor! }]);
+        }}
+      >
+        <Text>Next page</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+  },
+  center: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 14,
+    color: '#64748b',
+  },
+  topBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: '#ffffff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+  },
+  feedTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  feedSubtitle: {
+    fontSize: 12,
+    color: '#64748b',
+  },
+  createButton: {
+    backgroundColor: '#167044',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  createButtonText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  listContent: {
+    padding: 16,
+    paddingBottom: 40,
+  },
+  card: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  title: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#0f172a',
+    flex: 1,
+    marginRight: 8,
+  },
+  description: {
+    fontSize: 13,
+    color: '#475569',
+    marginBottom: 10,
+    lineHeight: 18,
+  },
+  detailsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+  },
+  detailText: {
+    fontSize: 12,
+    color: '#64748b',
+    fontWeight: '500',
+  },
+  deadlineText: {
+    fontSize: 12,
+    color: '#075985',
+    fontWeight: '500',
+  },
+  badge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+    backgroundColor: '#f1f5f9',
+  },
+  badgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  badgeOpen: {
+    backgroundColor: '#dcfce7',
+  },
+  badgeOpenText: {
+    color: '#15803d',
+  },
+  badgeDraft: {
+    backgroundColor: '#fef3c7',
+  },
+  badgeDraftText: {
+    color: '#b45309',
+  },
+  badgeAssigned: {
+    backgroundColor: '#e0e7ff',
+  },
+  badgeAssignedText: {
+    color: '#4338ca',
+  },
+  badgeCollected: {
+    backgroundColor: '#e2e8f0',
+  },
+  badgeCollectedText: {
+    color: '#475569',
+  },
+  badgeCancelled: {
+    backgroundColor: '#fee2e2',
+  },
+  badgeCancelledText: {
+    color: '#b91c1c',
+  },
+  cardActions: {
+    marginTop: 10,
+    alignItems: 'flex-end',
+  },
+  cancelActionButton: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  cancelActionText: {
+    fontSize: 12,
+    color: '#b91c1c',
+    fontWeight: '500',
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    paddingVertical: 40,
+    paddingHorizontal: 20,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#0f172a',
+    marginBottom: 8,
+  },
+  emptySubtitle: {
+    fontSize: 13,
+    color: '#64748b',
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 16,
+  },
+  emptyCta: {
+    backgroundColor: '#167044',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+  },
+  emptyCtaText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  errorBox: {
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fca5a5',
+    padding: 10,
+    margin: 16,
+    borderRadius: 8,
+  },
+  errorText: {
+    fontSize: 13,
+    color: '#dc2626',
+  },
+});

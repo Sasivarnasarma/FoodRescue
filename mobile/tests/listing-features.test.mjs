@@ -6,6 +6,10 @@ import {
   getBase64ByteLength,
   compareDonations,
 } from '../src/lib/listing-helpers.ts';
+import {
+  parseLocalDate,
+  positiveQuantity,
+} from '../src/lib/listing-form-validation.ts';
 test('manual coordinates reject blanks, nonfinite and out of range values', () => {
   for (const values of [
     ['', '0'],
@@ -56,4 +60,12 @@ test('ordering consistently prioritizes deadline over distance', () => {
 test('base64 byte size includes correct padding at the photo limit', () => {
   for (const n of [1, 2, 3, 153599, 153600, 153601])
     assert.equal(getBase64ByteLength(Buffer.alloc(n).toString('base64')), n);
+});
+test('draft form rejects fractional quantities and invalid calendar dates', () => {
+  for (const value of ['', '1.5', '2x', '0', '-1'])
+    assert.throws(() => positiveQuantity(value));
+  assert.equal(positiveQuantity('5'), 5);
+  assert.throws(() => parseLocalDate('2026-02-30 12:00'));
+  assert.throws(() => parseLocalDate('2026-12-01 25:00'));
+  assert.equal(parseLocalDate('2026-12-01 12:30').getMinutes(), 30);
 });

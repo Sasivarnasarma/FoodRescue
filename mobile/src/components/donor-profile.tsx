@@ -9,6 +9,9 @@ import {
   accountErrorMessage,
   donorColors,
 } from '@/components/donor-controls';
+import type { FoodListing } from '@/lib/listings';
+import { DonorListingForm } from '@/components/donor-listing-form';
+import { DonorListingsFeed } from '@/components/donor-listings-feed';
 import { useDonorProfile } from '@/hooks/use-donor-profile';
 import { signOutAccount } from '@/lib/auth';
 import { submitProfile } from '@/lib/verification';
@@ -35,6 +38,11 @@ export function DonorProfile({ user }: { user: User }) {
   const [displayName, setDisplayName] = useState('');
   const [businessName, setBusinessName] = useState('');
   const [busy, setBusy] = useState<'profile' | 'signout' | null>(null);
+  const [editing, setEditing] = useState<FoodListing>();
+  const [notice, setNotice] = useState('');
+  const [viewMode, setViewMode] = useState<'profile' | 'feed' | 'create'>(
+    'profile',
+  );
   const [message, setMessage] = useState('');
 
   async function submit() {
@@ -180,6 +188,22 @@ export function DonorProfile({ user }: { user: User }) {
           {statusCopy[status].title}
         </Text>
         <Text style={styles.body}>{statusCopy[status].description}</Text>
+        {status === 'approved' && (
+          <View style={{ marginTop: 14, gap: 8 }}>
+            <AccountButton
+              label="+ Post New Food Donation"
+              onPress={() => {
+                setEditing(undefined);
+                setViewMode('create');
+              }}
+            />
+            <AccountButton
+              label="View & Manage Donations"
+              onPress={() => setViewMode('feed')}
+              secondary
+            />
+          </View>
+        )}
         {status === 'rejected' && (
           <Text style={styles.body}>
             <Text style={{ fontWeight: 'bold' }}>Rejection reason: </Text>
@@ -187,6 +211,50 @@ export function DonorProfile({ user }: { user: User }) {
               'No reason was recorded for this earlier decision.'}
           </Text>
         )}
+      </View>
+    );
+  }
+
+  const canManage =
+    !error &&
+    account?.data?.accountStatus === 'active' &&
+    profile?.data?.verificationStatus === 'approved' &&
+    !fromCache;
+  if (canManage && viewMode === 'create') {
+    return (
+      <DonorListingForm
+        key={editing?.id ?? 'new'}
+        initialListing={editing}
+        onSuccess={() => {
+          setNotice('Donation saved successfully.');
+          setViewMode('feed');
+        }}
+        onCancel={() => setViewMode('profile')}
+      />
+    );
+  }
+
+  if (canManage && viewMode === 'feed') {
+    return (
+      <View style={{ flex: 1, minHeight: 450 }}>
+        {notice && <Text accessibilityLiveRegion="polite">{notice}</Text>}
+        <DonorListingsFeed
+          onCreatePress={() => {
+            setEditing(undefined);
+            setViewMode('create');
+          }}
+          onEditDraft={(listing) => {
+            setEditing(listing);
+            setViewMode('create');
+          }}
+        />
+        <View style={{ padding: 16 }}>
+          <AccountButton
+            label="Back to Profile"
+            onPress={() => setViewMode('profile')}
+            secondary
+          />
+        </View>
       </View>
     );
   }
