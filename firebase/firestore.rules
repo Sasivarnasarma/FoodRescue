@@ -46,7 +46,7 @@ service cloud.firestore {
     }
 
     function validText(value, max) {
-      return value is string && value.size() <= max && value.matches('.*\\S.*');
+      return value is string && value.size() <= max && value.matches('(?s).*\\S.*');
     }
 
     function validListingStatus(status) {

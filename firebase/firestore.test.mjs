@@ -12,6 +12,7 @@ import {
   collection,
   doc,
   deleteDoc,
+  deleteField,
   getDoc,
   getDocs,
   limit,
@@ -627,4 +628,51 @@ test('deadline-filtered discovery skips elapsed listings and supports bounded pa
   );
   assert.equal(next.size, 1);
   assert.ok(!first.docs.some((d) => d.id === next.docs[0].id));
+});
+
+test('multiline food descriptions and storage instructions remain publishable', async () => {
+  const db = await approvedDonor();
+  await assertSucceeds(
+    setDoc(
+      doc(db, 'foodListings', 'multiline'),
+      validListing('donor', {
+        description: 'Fresh bread\nPacked for pickup',
+        storageInstructions: 'Keep dry\nCollect at counter',
+      }),
+    ),
+  );
+});
+
+test('donor can clear optional dates and manual location on a saved draft', async () => {
+  const db = await approvedDonor();
+  const ref = doc(db, 'foodListings', 'clear-draft');
+  await setDoc(
+    ref,
+    draftListing('donor', {
+      pickupLocation: new GeoPoint(0, 0),
+      pickupStartsAt: Timestamp.now(),
+      pickupDeadline: Timestamp.now(),
+      useByAt: Timestamp.now(),
+      bestBeforeAt: Timestamp.now(),
+    }),
+  );
+  await assertSucceeds(
+    updateDoc(ref, {
+      pickupLocation: deleteField(),
+      pickupStartsAt: deleteField(),
+      pickupDeadline: deleteField(),
+      useByAt: deleteField(),
+      bestBeforeAt: deleteField(),
+      updatedAt: serverTimestamp(),
+    }),
+  );
+  const saved = (await getDoc(ref)).data();
+  for (const key of [
+    'pickupLocation',
+    'pickupStartsAt',
+    'pickupDeadline',
+    'useByAt',
+    'bestBeforeAt',
+  ])
+    assert.equal(key in saved, false);
 });
