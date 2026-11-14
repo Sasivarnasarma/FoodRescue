@@ -26,7 +26,12 @@
     },
     "plugins": [
       "expo-router",
-      ["expo-camera", { "recordAudioAndroid": false }],
+      [
+        "expo-camera",
+        {
+          "recordAudioAndroid": false
+        }
+      ],
       "expo-location",
       [
         "expo-splash-screen",
@@ -34,6 +39,14 @@
           "backgroundColor": "#208AEF",
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "microphonePermission": false,
+          "photosPermission": "Choose an optional donation photo.",
+          "cameraPermission": "Take an optional donation photo."
         }
       ]
     ],
