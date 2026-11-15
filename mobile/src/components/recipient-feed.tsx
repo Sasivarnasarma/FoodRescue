@@ -24,7 +24,10 @@ import {
 } from '../lib/location-service';
 import { compareDonations } from '../lib/listing-helpers';
 import { ListingDetailSheet } from './listing-detail-sheet';
+import { OrganizationRequestsView } from './organization-requests-view';
+
 export function RecipientFeed() {
+  const [activeTab, setActiveTab] = useState<'feed' | 'requests'>('feed');
   const [cursors, setCursors] = useState<ListingPageOptions[]>([{}]);
   const options = cursors[cursors.length - 1];
   const [attempt, setAttempt] = useState(0);
@@ -179,12 +182,7 @@ export function RecipientFeed() {
     [listings, now, selectedCategory, searchQuery, recipientLocation],
   );
   if (selectedId) {
-    const selected =
-      detail?.id === selectedId &&
-      detail.listing?.pickupDeadline &&
-      detail.listing.pickupDeadline.getTime() > now
-        ? detail.listing
-        : null;
+    const selected = detail?.id === selectedId ? detail.listing : null;
     if (detail?.id !== selectedId)
       return <ActivityIndicator accessibilityLabel="Loading listing details" />;
     return (
@@ -289,93 +287,144 @@ export function RecipientFeed() {
 
   return (
     <View style={{ gap: 12 }}>
-      <Text accessibilityRole="header" style={styles.title}>
-        Available donations
-      </Text>
-      <AccountButton
-        label={
-          recipientLocation ? 'Change location' : 'Set location for distances'
-        }
-        secondary
-        onPress={() => setEditLocation((v) => !v)}
-      />
-      {editLocation && (
-        <LocationPickerCard
-          title="Your location (optional)"
-          location={recipientLocation}
-          address={locationAddress}
-          onLocationChange={(coords, label) => {
-            setRecipientLocation(coords);
-            setLocationAddress(label);
-          }}
-        />
-      )}
-      {!recipientLocation && (
-        <Text>Distance unavailable. Set a location or browse by deadline.</Text>
-      )}
-      <TextInput
-        accessibilityLabel="Search donations"
-        style={styles.searchInput}
-        placeholder="Search donations"
-        value={searchQuery}
-        onChangeText={setSearchQuery}
-      />
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-        {['All', ...FOOD_CATEGORIES].map((category) => (
-          <AccountButton
-            key={category}
-            label={category}
-            secondary={selectedCategory !== category}
-            onPress={() => setSelectedCategory(category)}
-          />
-        ))}
+      <View style={styles.tabSelector}>
+        <TouchableOpacity
+          accessibilityRole="tab"
+          accessibilityState={{ selected: activeTab === 'feed' }}
+          style={[styles.tabItem, activeTab === 'feed' && styles.tabItemActive]}
+          onPress={() => setActiveTab('feed')}
+        >
+          <Text
+            style={[
+              styles.tabItemText,
+              activeTab === 'feed' && styles.tabItemTextActive,
+            ]}
+          >
+            Nearby Donations
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          accessibilityRole="tab"
+          accessibilityState={{ selected: activeTab === 'requests' }}
+          style={[
+            styles.tabItem,
+            activeTab === 'requests' && styles.tabItemActive,
+          ]}
+          onPress={() => setActiveTab('requests')}
+        >
+          <Text
+            style={[
+              styles.tabItemText,
+              activeTab === 'requests' && styles.tabItemTextActive,
+            ]}
+          >
+            My Requests
+          </Text>
+        </TouchableOpacity>
       </View>
-      <Text>
-        Earliest deadline first. Search and categories apply to the current
-        page.
-      </Text>
-      {page?.fromCache && (
-        <Text accessibilityLiveRegion="polite">
-          Offline or reconnecting. Saved information may be out of date.
-        </Text>
-      )}
-      {page?.hasPendingWrites && <Text>Waiting for server confirmation.</Text>}
-      {!current ? (
-        <ActivityIndicator accessibilityLabel="Loading donations" />
-      ) : current.error ? (
-        <AccountError message={current.error} />
-      ) : processedListings.length === 0 ? (
-        <Text>
-          No donations match this page. Check another page or change your
-          filters.
-        </Text>
+
+      {activeTab === 'requests' ? (
+        <OrganizationRequestsView
+          onSelectListing={(id) => setSelectedId(id)}
+          onBrowseListings={() => setActiveTab('feed')}
+        />
       ) : (
-        processedListings.map((item) => (
-          <View key={item.listing.id}>{renderItem({ item })}</View>
-        ))
+        <>
+          <Text accessibilityRole="header" style={styles.title}>
+            Available donations
+          </Text>
+          <AccountButton
+            label={
+              recipientLocation
+                ? 'Change location'
+                : 'Set location for distances'
+            }
+            secondary
+            onPress={() => setEditLocation((v) => !v)}
+          />
+          {editLocation && (
+            <LocationPickerCard
+              title="Your location (optional)"
+              location={recipientLocation}
+              address={locationAddress}
+              onLocationChange={(coords, label) => {
+                setRecipientLocation(coords);
+                setLocationAddress(label);
+              }}
+            />
+          )}
+          {!recipientLocation && (
+            <Text>
+              Distance unavailable. Set a location or browse by deadline.
+            </Text>
+          )}
+          <TextInput
+            accessibilityLabel="Search donations"
+            style={styles.searchInput}
+            placeholder="Search donations"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+            {['All', ...FOOD_CATEGORIES].map((category) => (
+              <AccountButton
+                key={category}
+                label={category}
+                secondary={selectedCategory !== category}
+                onPress={() => setSelectedCategory(category)}
+              />
+            ))}
+          </View>
+          <Text>
+            Earliest deadline first. Search and categories apply to the current
+            page.
+          </Text>
+          {page?.fromCache && (
+            <Text accessibilityLiveRegion="polite">
+              Offline or reconnecting. Saved information may be out of date.
+            </Text>
+          )}
+          {page?.hasPendingWrites && (
+            <Text>Waiting for server confirmation.</Text>
+          )}
+          {!current ? (
+            <ActivityIndicator accessibilityLabel="Loading donations" />
+          ) : current.error ? (
+            <AccountError message={current.error} />
+          ) : processedListings.length === 0 ? (
+            <Text>
+              No donations match this page. Check another page or change your
+              filters.
+            </Text>
+          ) : (
+            processedListings.map((item) => (
+              <View key={item.listing.id}>{renderItem({ item })}</View>
+            ))
+          )}
+          <AccountButton
+            label="Refresh / retry"
+            secondary
+            onPress={() => setAttempt((v) => v + 1)}
+          />
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <AccountButton
+              label="Previous page"
+              secondary
+              disabled={!current || cursors.length === 1}
+              onPress={() => setCursors((v) => v.slice(0, -1))}
+            />
+            <AccountButton
+              label="Next page"
+              secondary
+              disabled={!page?.nextCursor}
+              onPress={() => {
+                if (page?.nextCursor)
+                  setCursors((v) => [...v, { after: page.nextCursor! }]);
+              }}
+            />
+          </View>
+        </>
       )}
-      <AccountButton
-        label="Refresh / retry"
-        secondary
-        onPress={() => setAttempt((v) => v + 1)}
-      />
-      <View style={{ flexDirection: 'row', gap: 10 }}>
-        <AccountButton
-          label="Previous page"
-          secondary
-          disabled={!current || cursors.length === 1}
-          onPress={() => setCursors((v) => v.slice(0, -1))}
-        />
-        <AccountButton
-          label="Next page"
-          secondary
-          disabled={!page?.nextCursor}
-          onPress={() => {
-            if (page?.nextCursor)
-              setCursors((v) => [...v, { after: page.nextCursor! }]);
-          }}
-        />
-      </View>
     </View>
   );
 }
@@ -569,5 +618,35 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: 13,
     color: '#dc2626',
+  },
+  tabSelector: {
+    flexDirection: 'row',
+    backgroundColor: '#e2e8f0',
+    borderRadius: 10,
+    padding: 3,
+    marginBottom: 4,
+  },
+  tabItem: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: 8,
+  },
+  tabItemActive: {
+    backgroundColor: '#ffffff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  tabItemText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+  tabItemTextActive: {
+    color: '#167044',
+    fontWeight: '700',
   },
 });
