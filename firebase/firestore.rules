@@ -25,6 +25,10 @@ service cloud.firestore {
       return /databases/$(database)/documents/foodListings/$(id);
     }
 
+    function requestPath(listingId, organizationUid) {
+      return /databases/$(database)/documents/foodListings/$(listingId)/requests/$(organizationUid);
+    }
+
     function isApprovedProvider(uid) {
       return request.auth != null && request.auth.uid == uid
         && exists(userPath(uid)) && exists(profilePath(uid))
@@ -35,7 +39,11 @@ service cloud.firestore {
 
     function isApprovedOrganization(uid) {
       return request.auth != null && request.auth.uid == uid
-        && exists(userPath(uid)) && exists(profilePath(uid))
+        && isEligibleOrganization(uid);
+    }
+
+    function isEligibleOrganization(uid) {
+      return exists(userPath(uid)) && exists(profilePath(uid))
         && get(userPath(uid)).data.role == 'organization'
         && get(userPath(uid)).data.accountStatus == 'active'
         && get(profilePath(uid)).data.verificationStatus == 'approved';
@@ -86,7 +94,8 @@ service cloud.firestore {
         'allergenInfo', 'allergenDeclaration', 'pickupAddress', 'pickupLocation',
         'pickupStartsAt', 'pickupDeadline', 'bestBeforeAt', 'useByAt',
         'status', 'createdAt',
-        'updatedAt', 'demoImageKey'
+        'updatedAt', 'demoImageKey',
+        'acceptedOrganizationUid', 'collectedAt'
       ]);
     }
 
@@ -151,7 +160,8 @@ service cloud.firestore {
     match /foodListings/{listingId} {
       allow get: if (request.auth != null && resource.data.providerUid == request.auth.uid)
         || isAdmin()
-        || (resource.data.status == 'open' && isApprovedOrganization(request.auth.uid));
+        || (resource.data.status == 'open' && isApprovedOrganization(request.auth.uid))
+        || (isApprovedOrganization(request.auth.uid) && exists(requestPath(listingId, request.auth.uid)));
 
       allow list: if (request.auth != null && resource.data.providerUid == request.auth.uid && request.query.limit <= 50)
         || (isApprovedOrganization(request.auth.uid) && resource.data.status == 'open' && request.query.limit <= 50)
@@ -163,6 +173,8 @@ service cloud.firestore {
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time
         && validListingKeys(request.resource.data)
+        && !('acceptedOrganizationUid' in request.resource.data)
+        && !('collectedAt' in request.resource.data)
         && (
           (request.resource.data.status == 'draft'
             && request.resource.data.keys().hasAll(['providerUid', 'providerName', 'title', 'status', 'createdAt', 'updatedAt'])
@@ -182,6 +194,8 @@ service cloud.firestore {
         && validListingKeys(request.resource.data)
         && (
           (resource.data.status == 'draft'
+            && !('acceptedOrganizationUid' in request.resource.data)
+            && !('collectedAt' in request.resource.data)
             && (
               (request.resource.data.status == 'draft'
                 && validText(request.resource.data.title, 120))
@@ -194,6 +208,21 @@ service cloud.firestore {
           (resource.data.status == 'open'
             && request.resource.data.status == 'cancelled'
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']))
+          ||
+          (resource.data.status == 'open'
+            && request.resource.data.status == 'assigned'
+            && request.time + duration.value(15, 'm') <= resource.data.pickupDeadline
+            && request.resource.data.acceptedOrganizationUid is string
+            && isEligibleOrganization(request.resource.data.acceptedOrganizationUid)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'acceptedOrganizationUid', 'updatedAt'])
+            && exists(requestPath(listingId, request.resource.data.acceptedOrganizationUid))
+            && get(requestPath(listingId, request.resource.data.acceptedOrganizationUid)).data.status == 'requested'
+            && get(requestPath(listingId, request.resource.data.acceptedOrganizationUid)).data.canMeetStorageRequirement == true
+            && get(requestPath(listingId, request.resource.data.acceptedOrganizationUid)).data.plannedPickupAt >= request.time
+            && get(requestPath(listingId, request.resource.data.acceptedOrganizationUid)).data.plannedPickupAt >= resource.data.pickupStartsAt
+            && get(requestPath(listingId, request.resource.data.acceptedOrganizationUid)).data.plannedPickupAt <= resource.data.pickupDeadline
+            && getAfter(requestPath(listingId, request.resource.data.acceptedOrganizationUid)).data.status == 'approved'
+            && getAfter(requestPath(listingId, request.resource.data.acceptedOrganizationUid)).data.updatedAt == request.time)
         );
 
       allow delete: if isApprovedProvider(request.auth.uid)
@@ -207,6 +236,7 @@ service cloud.firestore {
             (request.auth != null && get(listingPath(listingId)).data.providerUid == request.auth.uid)
             || isAdmin()
             || (get(listingPath(listingId)).data.status == 'open' && isApprovedOrganization(request.auth.uid))
+            || (isApprovedOrganization(request.auth.uid) && exists(requestPath(listingId, request.auth.uid)))
           );
 
         allow list: if false;
@@ -224,6 +254,79 @@ service cloud.firestore {
           && isApprovedProvider(request.auth.uid)
           && isParentListingDraft(listingId, request.auth.uid);
       }
+
+      match /requests/{organizationUid} {
+        allow get: if isAdmin()
+          || isOwner(organizationUid)
+          || (request.auth != null && exists(listingPath(listingId)) && get(listingPath(listingId)).data.providerUid == request.auth.uid);
+
+        allow list: if (isAdmin() && request.query.limit <= 50)
+          || (request.auth != null && exists(listingPath(listingId)) && get(listingPath(listingId)).data.providerUid == request.auth.uid && request.query.limit <= 50)
+          || (isOwner(organizationUid) && request.query.limit <= 50);
+
+        allow create: if isApprovedOrganization(request.auth.uid)
+          && organizationUid == request.auth.uid
+          && exists(listingPath(listingId))
+          && get(listingPath(listingId)).data.status == 'open'
+          && request.time + duration.value(15, 'm') <= get(listingPath(listingId)).data.pickupDeadline
+          && request.resource.data.organizationUid == request.auth.uid
+          && request.resource.data.providerUid == get(listingPath(listingId)).data.providerUid
+          && request.resource.data.organizationName == get(profilePath(request.auth.uid)).data.name
+          && request.resource.data.status == 'requested'
+          && request.resource.data.canMeetStorageRequirement == true
+          && request.resource.data.plannedPickupAt is timestamp
+          && request.resource.data.plannedPickupAt >= request.time
+          && request.resource.data.plannedPickupAt >= get(listingPath(listingId)).data.pickupStartsAt
+          && request.resource.data.plannedPickupAt <= get(listingPath(listingId)).data.pickupDeadline
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.keys().hasAll([
+            'organizationUid', 'providerUid', 'organizationName',
+            'plannedPickupAt', 'canMeetStorageRequirement', 'status',
+            'createdAt', 'updatedAt'
+          ])
+          && request.resource.data.keys().hasOnly([
+            'organizationUid', 'providerUid', 'organizationName',
+            'plannedPickupAt', 'canMeetStorageRequirement', 'status',
+            'createdAt', 'updatedAt', 'departureLocation'
+          ])
+          && (!('departureLocation' in request.resource.data) || request.resource.data.departureLocation is latlng);
+
+        allow update: if (
+          // Withdrawal by organization
+          isApprovedOrganization(request.auth.uid)
+          && organizationUid == request.auth.uid
+          && resource.data.organizationUid == request.auth.uid
+          && resource.data.status == 'requested'
+          && request.resource.data.status == 'withdrawn'
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])
+        ) || (
+          // Approval by owning provider
+          isEligibleOrganization(organizationUid)
+          && isApprovedProvider(request.auth.uid)
+          && exists(listingPath(listingId))
+          && get(listingPath(listingId)).data.providerUid == request.auth.uid
+          && request.time + duration.value(15, 'm') <= get(listingPath(listingId)).data.pickupDeadline
+          && resource.data.status == 'requested'
+          && request.resource.data.status == 'approved'
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])
+          && get(listingPath(listingId)).data.status == 'open'
+          && getAfter(listingPath(listingId)).data.status == 'assigned'
+          && getAfter(listingPath(listingId)).data.acceptedOrganizationUid == organizationUid
+          && getAfter(listingPath(listingId)).data.updatedAt == request.time
+        );
+
+        allow delete: if false;
+      }
+    }
+
+    match /{path=**}/requests/{organizationUid} {
+      allow get: if (request.auth != null && resource.data.organizationUid == request.auth.uid)
+        || isAdmin();
+      allow list: if request.query.limit <= 50
+        && ((request.auth != null && resource.data.organizationUid == request.auth.uid) || isAdmin());
     }
   }
 }

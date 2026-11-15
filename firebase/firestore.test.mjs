@@ -10,6 +10,7 @@ import {
   GeoPoint,
   Timestamp,
   collection,
+  collectionGroup,
   doc,
   deleteDoc,
   deleteField,
@@ -675,4 +676,596 @@ test('donor can clear optional dates and manual location on a saved draft', asyn
     'bestBeforeAt',
   ])
     assert.equal(key in saved, false);
+});
+
+async function approvedOrganization(uid = 'org-1', name = 'Demo Shelter') {
+  const db = applicant(uid);
+  await submit(
+    db,
+    uid,
+    {
+      role: 'organization',
+      accountStatus: 'active',
+      displayName: name,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    },
+    {
+      name,
+      type: 'organization',
+      verificationStatus: 'pending',
+    },
+  );
+  await review(admin(), uid, 'approved');
+  return db;
+}
+
+function validRequest(listing, orgUid = 'org-1', overrides = {}) {
+  const now = Date.now();
+  const planned = new Timestamp(Math.floor(now / 1000) + 2400, 0);
+  return {
+    organizationUid: orgUid,
+    providerUid: listing.providerUid,
+    organizationName: 'Demo Shelter',
+    plannedPickupAt: planned,
+    canMeetStorageRequirement: true,
+    status: 'requested',
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+    ...overrides,
+  };
+}
+
+test('approved organization can submit a valid whole-listing request', async () => {
+  const donorDb = await approvedDonor();
+  const listingRef = doc(donorDb, 'foodListings', 'listing-req-1');
+  const listing = validListing('donor');
+  await setDoc(listingRef, listing);
+
+  const orgDb = await approvedOrganization('org-1');
+  const reqRef = doc(
+    orgDb,
+    'foodListings',
+    'listing-req-1',
+    'requests',
+    'org-1',
+  );
+  await assertSucceeds(setDoc(reqRef, validRequest(listing, 'org-1')));
+
+  const saved = (await getDoc(reqRef)).data();
+  assert.equal(saved.status, 'requested');
+  assert.equal(saved.canMeetStorageRequirement, true);
+  assert.equal(saved.organizationUid, 'org-1');
+});
+
+test('unapproved organizations and providers cannot submit requests', async () => {
+  const donorDb = await approvedDonor();
+  const listingRef = doc(donorDb, 'foodListings', 'listing-req-2');
+  const listing = validListing('donor');
+  await setDoc(listingRef, listing);
+
+  // Unapproved applicant cannot submit
+  const pendingOrgDb = applicant('pending-org');
+  await submit(
+    pendingOrgDb,
+    'pending-org',
+    user('organization'),
+    profile('organization'),
+  );
+  await assertFails(
+    setDoc(
+      doc(
+        pendingOrgDb,
+        'foodListings',
+        'listing-req-2',
+        'requests',
+        'pending-org',
+      ),
+      validRequest(listing, 'pending-org'),
+    ),
+  );
+
+  // Provider cannot submit a request
+  await assertFails(
+    setDoc(
+      doc(donorDb, 'foodListings', 'listing-req-2', 'requests', 'donor'),
+      validRequest(listing, 'donor'),
+    ),
+  );
+
+  // Organization cannot submit with mismatched document ID or organizationUid
+  const orgDb = await approvedOrganization('org-1');
+  await assertFails(
+    setDoc(
+      doc(orgDb, 'foodListings', 'listing-req-2', 'requests', 'org-2'),
+      validRequest(listing, 'org-1'),
+    ),
+  );
+  await assertFails(
+    setDoc(
+      doc(orgDb, 'foodListings', 'listing-req-2', 'requests', 'org-1'),
+      validRequest(listing, 'org-2'),
+    ),
+  );
+});
+
+test('request validation enforces storage requirement, timing, and deadline cutoff', async () => {
+  const donorDb = await approvedDonor();
+  const orgDb = await approvedOrganization('org-1');
+  const now = Date.now();
+
+  const listingRef = doc(donorDb, 'foodListings', 'listing-req-val');
+  const listing = validListing('donor', {
+    pickupStartsAt: new Timestamp(Math.floor(now / 1000) + 1800, 0),
+    pickupDeadline: new Timestamp(Math.floor(now / 1000) + 7200, 0),
+  });
+  await setDoc(listingRef, listing);
+
+  const reqRef = doc(
+    orgDb,
+    'foodListings',
+    'listing-req-val',
+    'requests',
+    'org-1',
+  );
+
+  // canMeetStorageRequirement must be true
+  await assertFails(
+    setDoc(
+      reqRef,
+      validRequest(listing, 'org-1', { canMeetStorageRequirement: false }),
+    ),
+  );
+
+  // plannedPickupAt before request.time fails
+  await assertFails(
+    setDoc(
+      reqRef,
+      validRequest(listing, 'org-1', {
+        plannedPickupAt: new Timestamp(Math.floor(now / 1000) - 100, 0),
+      }),
+    ),
+  );
+
+  // plannedPickupAt after pickupDeadline fails
+  await assertFails(
+    setDoc(
+      reqRef,
+      validRequest(listing, 'org-1', {
+        plannedPickupAt: new Timestamp(Math.floor(now / 1000) + 8000, 0),
+      }),
+    ),
+  );
+
+  // extra fields fail
+  await assertFails(
+    setDoc(
+      reqRef,
+      validRequest(listing, 'org-1', { unauthorizedField: 'bad' }),
+    ),
+  );
+
+  // optional departureLocation succeeds with GeoPoint
+  await assertSucceeds(
+    setDoc(
+      reqRef,
+      validRequest(listing, 'org-1', {
+        departureLocation: new GeoPoint(43.6532, -79.3832),
+      }),
+    ),
+  );
+});
+
+test('rejects request submission within 15 minutes of deadline or on non-open listings', async () => {
+  const donorDb = await approvedDonor();
+  const orgDb = await approvedOrganization('org-1');
+  const now = Date.now();
+
+  // Listing ending in 10 minutes (< 15 min cutoff)
+  const urgentListingRef = doc(donorDb, 'foodListings', 'listing-urgent');
+  const urgentListing = validListing('donor', {
+    pickupStartsAt: new Timestamp(Math.floor(now / 1000) - 3600, 0),
+    pickupDeadline: new Timestamp(Math.floor(now / 1000) + 600, 0),
+  });
+  await setDoc(urgentListingRef, urgentListing);
+
+  const urgentReqRef = doc(
+    orgDb,
+    'foodListings',
+    'listing-urgent',
+    'requests',
+    'org-1',
+  );
+  await assertFails(
+    setDoc(
+      urgentReqRef,
+      validRequest(urgentListing, 'org-1', {
+        plannedPickupAt: new Timestamp(Math.floor(now / 1000) + 300, 0),
+      }),
+    ),
+  );
+
+  // Draft listing cannot accept requests
+  const draftRef = doc(donorDb, 'foodListings', 'listing-draft');
+  await setDoc(draftRef, draftListing('donor'));
+  await assertFails(
+    setDoc(
+      doc(orgDb, 'foodListings', 'listing-draft', 'requests', 'org-1'),
+      validRequest({ providerUid: 'donor' }, 'org-1'),
+    ),
+  );
+});
+
+test('recipient can withdraw their own pending request and cannot resubmit', async () => {
+  const donorDb = await approvedDonor();
+  const listingRef = doc(donorDb, 'foodListings', 'listing-withdraw');
+  const listing = validListing('donor');
+  await setDoc(listingRef, listing);
+
+  const orgDb = await approvedOrganization('org-1');
+  const reqRef = doc(
+    orgDb,
+    'foodListings',
+    'listing-withdraw',
+    'requests',
+    'org-1',
+  );
+  await assertSucceeds(setDoc(reqRef, validRequest(listing, 'org-1')));
+
+  // Other organization cannot withdraw org-1's request
+  const org2Db = await approvedOrganization('org-2', 'Second Shelter');
+  await assertFails(
+    updateDoc(
+      doc(org2Db, 'foodListings', 'listing-withdraw', 'requests', 'org-1'),
+      {
+        status: 'withdrawn',
+        updatedAt: serverTimestamp(),
+      },
+    ),
+  );
+
+  // Recipient can withdraw their request
+  await assertSucceeds(
+    updateDoc(reqRef, {
+      status: 'withdrawn',
+      updatedAt: serverTimestamp(),
+    }),
+  );
+
+  const withdrawnData = (await getDoc(reqRef)).data();
+  assert.equal(withdrawnData.status, 'withdrawn');
+
+  // Once withdrawn, organization cannot update back to requested or resubmit
+  await assertFails(
+    updateDoc(reqRef, {
+      status: 'requested',
+      updatedAt: serverTimestamp(),
+    }),
+  );
+});
+
+test('donor can atomically approve one request; rules enforce single assignment invariant', async () => {
+  const donorDb = await approvedDonor();
+  const listingRef = doc(donorDb, 'foodListings', 'listing-approval');
+  const listing = validListing('donor');
+  await setDoc(listingRef, listing);
+
+  const org1Db = await approvedOrganization('org-1', 'First Shelter');
+  const org2Db = await approvedOrganization('org-2', 'Second Shelter');
+
+  const req1Ref = doc(
+    org1Db,
+    'foodListings',
+    'listing-approval',
+    'requests',
+    'org-1',
+  );
+  const req2Ref = doc(
+    org2Db,
+    'foodListings',
+    'listing-approval',
+    'requests',
+    'org-2',
+  );
+
+  await assertSucceeds(
+    setDoc(
+      req1Ref,
+      validRequest(listing, 'org-1', { organizationName: 'First Shelter' }),
+    ),
+  );
+  await assertSucceeds(
+    setDoc(
+      req2Ref,
+      validRequest(listing, 'org-2', { organizationName: 'Second Shelter' }),
+    ),
+  );
+
+  // Non-atomic listing update (without request update) fails
+  await assertFails(
+    updateDoc(listingRef, {
+      status: 'assigned',
+      acceptedOrganizationUid: 'org-1',
+      updatedAt: serverTimestamp(),
+    }),
+  );
+
+  // Non-atomic request update (without listing update) fails
+  await assertFails(
+    updateDoc(
+      doc(donorDb, 'foodListings', 'listing-approval', 'requests', 'org-1'),
+      {
+        status: 'approved',
+        updatedAt: serverTimestamp(),
+      },
+    ),
+  );
+
+  // Atomic approval transaction succeeds
+  await assertSucceeds(
+    runTransaction(donorDb, async (tx) => {
+      const snapListing = await tx.get(listingRef);
+      const snapReq = await tx.get(
+        doc(donorDb, 'foodListings', 'listing-approval', 'requests', 'org-1'),
+      );
+      assert.equal(snapListing.data().status, 'open');
+      assert.equal(snapReq.data().status, 'requested');
+
+      tx.update(listingRef, {
+        status: 'assigned',
+        acceptedOrganizationUid: 'org-1',
+        updatedAt: serverTimestamp(),
+      });
+      tx.update(
+        doc(donorDb, 'foodListings', 'listing-approval', 'requests', 'org-1'),
+        {
+          status: 'approved',
+          updatedAt: serverTimestamp(),
+        },
+      );
+    }),
+  );
+
+  const assignedListing = (await getDoc(listingRef)).data();
+  assert.equal(assignedListing.status, 'assigned');
+  assert.equal(assignedListing.acceptedOrganizationUid, 'org-1');
+
+  const approvedReq = (await getDoc(req1Ref)).data();
+  assert.equal(approvedReq.status, 'approved');
+
+  // Competing approval of org-2 now fails because listing is no longer open
+  await assertFails(
+    runTransaction(donorDb, async (tx) => {
+      tx.update(listingRef, {
+        status: 'assigned',
+        acceptedOrganizationUid: 'org-2',
+        updatedAt: serverTimestamp(),
+      });
+      tx.update(
+        doc(donorDb, 'foodListings', 'listing-approval', 'requests', 'org-2'),
+        {
+          status: 'approved',
+          updatedAt: serverTimestamp(),
+        },
+      );
+    }),
+  );
+});
+
+test('request read access: donor lists, recipient reads own and queries collectionGroup', async () => {
+  const donorDb = await approvedDonor();
+  const listingRef = doc(donorDb, 'foodListings', 'listing-reads');
+  const listing = validListing('donor');
+  await setDoc(listingRef, listing);
+
+  const org1Db = await approvedOrganization('org-1', 'First Shelter');
+  const org2Db = await approvedOrganization('org-2', 'Second Shelter');
+
+  const req1Ref = doc(
+    org1Db,
+    'foodListings',
+    'listing-reads',
+    'requests',
+    'org-1',
+  );
+  const req2Ref = doc(
+    org2Db,
+    'foodListings',
+    'listing-reads',
+    'requests',
+    'org-2',
+  );
+
+  await setDoc(
+    req1Ref,
+    validRequest(listing, 'org-1', { organizationName: 'First Shelter' }),
+  );
+  await setDoc(
+    req2Ref,
+    validRequest(listing, 'org-2', { organizationName: 'Second Shelter' }),
+  );
+
+  // Owning donor can list requests for their listing
+  const donorRequests = await assertSucceeds(
+    getDocs(
+      query(
+        collection(donorDb, 'foodListings', 'listing-reads', 'requests'),
+        limit(50),
+      ),
+    ),
+  );
+  assert.equal(donorRequests.size, 2);
+
+  // Recipient org-1 can read their own request
+  await assertSucceeds(
+    getDoc(doc(org1Db, 'foodListings', 'listing-reads', 'requests', 'org-1')),
+  );
+
+  // Recipient org-1 CANNOT read org-2's request
+  await assertFails(
+    getDoc(doc(org1Db, 'foodListings', 'listing-reads', 'requests', 'org-2')),
+  );
+
+  // Recipient org-1 CANNOT list all requests under listing
+  await assertFails(
+    getDocs(
+      query(
+        collection(org1Db, 'foodListings', 'listing-reads', 'requests'),
+        limit(50),
+      ),
+    ),
+  );
+
+  // Recipient org-1 can query collectionGroup requests filtered by their organizationUid
+  const orgGroupQuery = query(
+    collectionGroup(org1Db, 'requests'),
+    where('organizationUid', '==', 'org-1'),
+    limit(50),
+  );
+  const myRequests = await assertSucceeds(getDocs(orgGroupQuery));
+  assert.equal(myRequests.size, 1);
+
+  // Recipient org-1 CANNOT query collectionGroup without their own organizationUid
+  const allGroupQuery = query(collectionGroup(org1Db, 'requests'), limit(50));
+  await assertFails(getDocs(allGroupQuery));
+
+  // Recipient who submitted request can still read parent listing after assignment
+  await runTransaction(donorDb, async (tx) => {
+    tx.update(listingRef, {
+      status: 'assigned',
+      acceptedOrganizationUid: 'org-1',
+      updatedAt: serverTimestamp(),
+    });
+    tx.update(
+      doc(donorDb, 'foodListings', 'listing-reads', 'requests', 'org-1'),
+      {
+        status: 'approved',
+        updatedAt: serverTimestamp(),
+      },
+    );
+  });
+
+  // Participating org-1 can get listing
+  await assertSucceeds(getDoc(doc(org1Db, 'foodListings', 'listing-reads')));
+
+  // Non-participating org-3 cannot get assigned listing
+  const org3Db = await approvedOrganization('org-3', 'Third Shelter');
+  await assertFails(getDoc(doc(org3Db, 'foodListings', 'listing-reads')));
+});
+
+function approvalBatch(db, id, uid) {
+  const batch = writeBatch(db);
+  batch.update(doc(db, 'foodListings', id), {
+    status: 'assigned',
+    acceptedOrganizationUid: uid,
+    updatedAt: serverTimestamp(),
+  });
+  batch.update(doc(db, 'foodListings', id, 'requests', uid), {
+    status: 'approved',
+    updatedAt: serverTimestamp(),
+  });
+  return batch;
+}
+async function requestFixture(id, uids = ['org-1']) {
+  const db = await approvedDonor();
+  const listing = validListing();
+  await setDoc(doc(db, 'foodListings', id), listing);
+  for (const uid of uids) {
+    const orgDb = await approvedOrganization(uid);
+    await setDoc(
+      doc(orgDb, 'foodListings', id, 'requests', uid),
+      validRequest(listing, uid),
+    );
+  }
+  return db;
+}
+test('approval rejects revoked verification and suspended recipient accounts', async () => {
+  const db = await requestFixture('revoked');
+  await review(admin(), 'org-1', 'rejected');
+  await assertFails(approvalBatch(db, 'revoked', 'org-1').commit());
+  await review(admin(), 'org-1', 'approved');
+  await env.withSecurityRulesDisabled(async (context) => {
+    await updateDoc(doc(context.firestore(), 'users', 'org-1'), {
+      accountStatus: 'suspended',
+    });
+  });
+  await assertFails(approvalBatch(db, 'revoked', 'org-1').commit());
+  assert.equal(
+    (await getDoc(doc(db, 'foodListings', 'revoked'))).data().status,
+    'open',
+  );
+});
+test('concurrent approval transactions assign exactly one organization', async () => {
+  const db = await requestFixture('race', ['org-1', 'org-2']);
+  const approve = (uid) => {
+    const client = applicant('donor');
+    return runTransaction(client, async (tx) => {
+      const parent = doc(client, 'foodListings', 'race');
+      const request = doc(client, 'foodListings', 'race', 'requests', uid);
+      const [listing, candidate] = await Promise.all([
+        tx.get(parent),
+        tx.get(request),
+      ]);
+      if (
+        listing.data().status !== 'open' ||
+        candidate.data().status !== 'requested'
+      )
+        throw new Error('Already assigned');
+      tx.update(parent, {
+        status: 'assigned',
+        acceptedOrganizationUid: uid,
+        updatedAt: serverTimestamp(),
+      });
+      tx.update(request, { status: 'approved', updatedAt: serverTimestamp() });
+    });
+  };
+  const results = await Promise.allSettled(['org-1', 'org-2'].map(approve));
+  assert.equal(results.filter((r) => r.status === 'fulfilled').length, 1);
+  const selected = (await getDoc(doc(db, 'foodListings', 'race'))).data()
+    .acceptedOrganizationUid;
+  for (const uid of ['org-1', 'org-2']) {
+    const request = (
+      await getDoc(doc(db, 'foodListings', 'race', 'requests', uid))
+    ).data();
+    assert.equal(request.status, uid === selected ? 'approved' : 'requested');
+  }
+});
+test('one batch cannot approve two requests or approve a stale pickup proposal', async () => {
+  const db = await requestFixture('multiple', ['org-1', 'org-2']);
+  const batch = approvalBatch(db, 'multiple', 'org-1');
+  batch.update(doc(db, 'foodListings', 'multiple', 'requests', 'org-2'), {
+    status: 'approved',
+    updatedAt: serverTimestamp(),
+  });
+  await assertFails(batch.commit());
+  // Represent a previously valid proposal whose pickup time has elapsed.
+  await env.withSecurityRulesDisabled(async (context) => {
+    await updateDoc(
+      doc(context.firestore(), 'foodListings', 'multiple', 'requests', 'org-1'),
+      { plannedPickupAt: Timestamp.fromMillis(Date.now() - 60_000) },
+    );
+  });
+  await assertFails(approvalBatch(db, 'multiple', 'org-1').commit());
+});
+test('request history queries require an explicit limit of at most 50 for every role', async () => {
+  const donorDb = await requestFixture('bounded');
+  const orgDb = applicant('org-1');
+  for (const db of [admin(), orgDb]) {
+    const group = collectionGroup(db, 'requests');
+    const scope = db === orgDb ? [where('organizationUid', '==', 'org-1')] : [];
+    await assertFails(getDocs(query(group, ...scope)));
+    await assertFails(getDocs(query(group, ...scope, limit(51))));
+    const page = await assertSucceeds(
+      getDocs(query(group, ...scope, orderBy('createdAt', 'desc'), limit(50))),
+    );
+    assert.equal(page.size, 1);
+  }
+  await assertFails(
+    getDocs(collection(donorDb, 'foodListings', 'bounded', 'requests')),
+  );
+  await assertFails(
+    getDoc(
+      doc(unauthenticated(), 'foodListings', 'bounded', 'requests', 'org-1'),
+    ),
+  );
 });
