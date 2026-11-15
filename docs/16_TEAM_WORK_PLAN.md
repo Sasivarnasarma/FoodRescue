@@ -30,13 +30,15 @@ Phase 1 implementation is merged. The donor and organization screens use the sha
 
 | Member | Work | Status |
 |---|---|---|
-| 1 | Build the draft and publish screens. Include quantity, storage details, allergens, and the pickup window. | Pending |
-| 2 | Build the nearby donations feed and listing detail. Show distance, deadline, and pickup information. | Pending |
+| 1 | Build the draft and publish screens. Include quantity, storage details, allergens, and the pickup window. | Done |
+| 2 | Build the nearby donations feed and listing detail. Show distance, deadline, and pickup information. | Done |
 | 3 | Implement listing and photo access rules. Connect live listing reads to the shared Firebase project. | Done |
-| 4 | Prepare synthetic donor, organization, and listing data. Set up examples for comparing nearby and urgent donations. | Pending |
-| 5 | Add GPS, manual location entry, maps directions, and camera/gallery selection. Compress optional photos to the 150 KiB limit and connect the preview to the donor form. | Pending |
+| 4 | Prepare synthetic donor, organization, and listing data. Set up examples for comparing nearby and urgent donations. | Done |
+| 5 | Add GPS, manual location entry, maps directions, and camera/gallery selection. Compress optional photos to the 150 KiB limit and connect the preview to the donor form. | Done |
 
 **Ready when** a listing published on phone A appears on phone B without a refresh.
+
+Implementation is integrated into main through reviewed feature branches. Physical Android and live two-phone acceptance are still pending. See [Phase 2 integration](17_PHASE2_INTEGRATION.md) for test commands and synthetic demo scenarios.
 
 ## Phase 3 — Request, match, and approve
 

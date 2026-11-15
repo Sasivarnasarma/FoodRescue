@@ -2,7 +2,7 @@
 
 This folder contains starter security/configuration files. They are not a complete production deployment.
 
-The Firebase foundation is configured with Email/Password sign-in, a default Firestore database in asia-south1, and a verified first admin claim. The account-management rules add repeat reviews and applicant-visible rejection reasons. All nine updated rules tests pass locally. Deploy these updated rules before using the new review flow against the live project.
+The Firebase foundation is configured with Email/Password sign-in, a default Firestore database in asia-south1, and a verified first admin claim. The account-management rules add repeat reviews and applicant-visible rejection reasons. The rules suite covers account reviews, listing access, photo size and atomic draft restrictions. Deploy these updated rules before using the new review flow against the live project.
 
 Firebase tooling is a package in the root pnpm workspace. Install from the repository root and commit the shared root lockfile.
 
@@ -55,3 +55,5 @@ Listing and photo rules, indexes and client helpers are implemented. Deploy both
 Use `mobile/src/lib/listings.ts` for draft creation/update, publishing, cancellation, primary photo upload/removal and reads. Subscription callbacks receive `(listings, page)` where `page` contains `fromCache`, `hasPendingWrites` and `nextCursor`. Pass `{ after: page.nextCursor }` as the final options argument for the next bounded page. Keep cursors scoped to the same query. Unsubscribe when the screen closes. Discovery excludes past deadlines before applying the limit, refreshes its moving bound every 30 seconds, and donor pages order by creation time. Missing draft coordinates and pickup dates are `undefined`, not fake coordinates or dates. Show cached results as stale and wait for write promises before reporting success.
 
 Manual integration check: publish without a photo on donor phone A, verify live appearance on approved organization phone B, open details, and repeat with a compressed photo. Verify pagination, offline/cache labels, denied reads for pending applicants and revoked donor write access. Physical two-phone verification and live deployment remain separate integration steps.
+
+For the combined Phase 2 screens and emulator-only seed data, see [the integration checklist](../docs/17_PHASE2_INTEGRATION.md).
