@@ -24,6 +24,7 @@ import {
   type AccountSnapshot,
   type ProfileSnapshot,
 } from '@/lib/organization-verification';
+import { RecipientFeed } from './recipient-feed';
 import { submitProfile } from '@/lib/verification';
 
 const palette = {
@@ -228,6 +229,7 @@ export function ProfileStatus({ uid }: { uid: string }) {
   const [profile, setProfile] = useState<ProfileSnapshot>();
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
+  const [showFeed, setShowFeed] = useState(false);
 
   useEffect(() => {
     const { db } = getFirebaseClients();
@@ -319,6 +321,15 @@ export function ProfileStatus({ uid }: { uid: string }) {
     );
   }
 
+  if (showFeed && result.state === 'approved' && result.confirmed)
+    return (
+      <View style={{ gap: 12 }}>
+        <Action secondary onPress={() => setShowFeed(false)}>
+          Back to profile
+        </Action>
+        <RecipientFeed />
+      </View>
+    );
   const status = statusContent[result.state];
   return (
     <View style={styles.card}>
@@ -327,6 +338,9 @@ export function ProfileStatus({ uid }: { uid: string }) {
         {status.title}
       </Text>
       <Message tone={status.tone}>{status.message}</Message>
+      {result.state === 'approved' && result.confirmed && (
+        <Action onPress={() => setShowFeed(true)}>Browse donations</Action>
+      )}
       {result.state === 'rejected' && (
         <Text style={styles.body}>
           Rejection reason:{' '}
