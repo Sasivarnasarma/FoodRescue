@@ -16,6 +16,25 @@ Approval atomically writes the listing to `assigned` with `acceptedOrganizationU
 
 The single-request listener also supplies cache/pending metadata as its second callback argument. Both query subscriptions use `(requests, page)` callbacks. `page` supplies `fromCache`, `hasPendingWrites` and `nextCursor`. Pass `{ after: page.nextCursor }` as the final options argument for another page, scoped to the same query. Queries return at most 50 documents. Unsubscribe on screen exit and label cached/pending results. Mutation promises resolve after server acknowledgement; approval transactions require a connection. Organizations can read their own missing request before submitting and their request history without other organizations' locations. Rules check private recipient eligibility during donor approval; donors cannot read private recipient profiles directly.
 
+## Departure point and distance coordination (Member 5)
+
+Member 5 implements the coordinates connection and distance resolution for recipient requests:
+
+- `mobile/src/lib/departure-location.ts`:
+  - `calculateRequestDistanceKm(departureLocation?, pickupLocation?)`: Computes straight-line Haversine distance between recipient departure point and listing pickup location. Returns `null` if either point is missing or invalid.
+  - `getRequestDistanceInfo(departureLocation?, pickupLocation?)`: Evaluates both locations, categorizing state into `'available'`, `'missing_departure'`, `'missing_pickup'`, or `'invalid_coordinates'`, accompanied by formatted distance and human-readable explanation.
+  - `calculateDistanceScore(distanceKm)`: Normalizes straight-line distance score `100 * clamp(1 - distanceKm / 10, 0, 1)` per Section 2 of `08_SMART_MATCHING_ENGINE.md`. Returns `score: null` and `isAvailable: false` when distance is unavailable, allowing Member 4's smart matching engine to flag the request for manual donor assessment without crashing.
+  - `parseDepartureCoordinates(latStr, lonStr)` & `validateDepartureCoordinates(coords)`: Strict validation for manual inputs and optional coordinates.
+  - `formatRequestDistance(distanceKm, reason?)`: User-friendly distance formatting (meters if < 1 km, otherwise km).
+- `mobile/src/components/departure-location-card.tsx`:
+  - Interactive UI card for recipient departure coordinates.
+  - Handles GPS device lookup with loading/busy indicators, location permission denial with Settings redirect fallback, and manual coordinate input.
+  - Supports clearing coordinates so recipient can choose to omit departure location without blocking request submission.
+  - Provides real-time straight-line distance feedback to the listing pickup location.
+- `mobile/src/components/recipient-request-modal.tsx`:
+  - Connects the departure location picker, storage requirement affirmative checkbox, and proposed pickup window validation with `submitDonationRequest`.
+  - Subscribes to existing request status and provides withdrawal capability via `withdrawDonationRequest`.
+
 ## Checks and deployment
 
 From the root:

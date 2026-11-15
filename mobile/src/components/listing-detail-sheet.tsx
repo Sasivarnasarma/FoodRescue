@@ -14,6 +14,7 @@ import {
   openMapsNavigation,
   type LocationCoordinates,
 } from '../lib/location-service';
+import { RecipientRequestModal } from './recipient-request-modal';
 
 interface ListingDetailSheetProps {
   listing: FoodListing;
@@ -24,11 +25,13 @@ interface ListingDetailSheetProps {
 
 export function ListingDetailSheet({
   listing,
+  recipientLocation,
   distanceKm,
   onBack,
 }: ListingDetailSheetProps) {
   const [photoBase64, setPhotoBase64] = useState<string | null>(null);
   const [loadingPhoto, setLoadingPhoto] = useState(true);
+  const [showRequestModal, setShowRequestModal] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -219,6 +222,24 @@ export function ListingDetailSheet({
             Open in Google Maps / Directions
           </Text>
         </TouchableOpacity>
+
+        {listing.status === 'open' && (
+          <TouchableOpacity
+            accessibilityRole="button"
+            style={styles.requestButton}
+            onPress={() => setShowRequestModal(true)}
+          >
+            <Text style={styles.requestButtonText}>Request Entire Listing</Text>
+          </TouchableOpacity>
+        )}
+
+        <RecipientRequestModal
+          visible={showRequestModal}
+          listing={listing}
+          initialLocation={recipientLocation}
+          onClose={() => setShowRequestModal(false)}
+          onRequestSubmitted={() => setShowRequestModal(false)}
+        />
       </View>
     </ScrollView>
   );

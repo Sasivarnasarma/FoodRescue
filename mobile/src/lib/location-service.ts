@@ -133,3 +133,17 @@ export async function openMapsNavigation(
     );
   }
 }
+
+export {
+  calculateRequestDistanceKm,
+  calculateDistanceScore,
+  formatRequestDistance,
+  formatCoordinates,
+  getRequestDistanceInfo,
+  parseDepartureCoordinates,
+  validateDepartureCoordinates,
+  isValidCoordinate,
+  type DistanceStatus,
+  type RequestDistanceInfo,
+  type DistanceScoreResult,
+} from './departure-location';
