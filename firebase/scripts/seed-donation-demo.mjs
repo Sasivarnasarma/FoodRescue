@@ -1,7 +1,7 @@
 import { initializeApp } from 'firebase-admin/app';
 import { getFirestore, GeoPoint, Timestamp } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
-import { donationFixtures } from './demo-fixtures.mjs';
+import { donationFixtures, competingRequestFixtures } from './demo-fixtures.mjs';
 if (
   !process.env.FIRESTORE_EMULATOR_HOST ||
   !process.env.FIREBASE_AUTH_EMULATOR_HOST
@@ -15,6 +15,8 @@ const auth = getAuth();
 for (const [uid, role] of [
   ['demo-donor', 'provider'],
   ['demo-organization', 'organization'],
+  ['demo-competing-org-1', 'organization'],
+  ['demo-competing-org-2', 'organization'],
 ]) {
   try {
     await auth.getUser(uid);
@@ -39,7 +41,8 @@ for (const [uid, role] of [
     verificationStatus: 'approved',
   });
 }
-for (const fixture of donationFixtures())
+const fixtures = donationFixtures();
+for (const fixture of fixtures)
   await db.doc(`foodListings/${fixture.id}`).set({
     providerUid: 'demo-donor',
     providerName: 'Synthetic demo-donor',
@@ -60,6 +63,23 @@ for (const fixture of donationFixtures())
     createdAt: Timestamp.now(),
     updatedAt: Timestamp.now(),
   });
+
+const urgentNear = fixtures.find((f) => f.id === 'demo-urgent-near');
+if (urgentNear) {
+  for (const req of competingRequestFixtures(urgentNear.id, urgentNear.deadline)) {
+    await db.doc(`foodListings/${urgentNear.id}/requests/${req.organizationUid}`).set({
+      organizationUid: req.organizationUid,
+      providerUid: req.providerUid,
+      organizationName: req.organizationName,
+      departureLocation: new GeoPoint(req.latitude, req.longitude),
+      plannedPickupAt: Timestamp.fromMillis(req.plannedPickupAt),
+      canMeetStorageRequirement: req.canMeetStorageRequirement,
+      status: req.status,
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+    });
+  }
+}
 console.log(
-  'Seeded 2 synthetic accounts and 4 demo listings in the emulators.',
+  'Seeded 4 synthetic accounts, 4 demo listings, and 2 competing requests in the emulators.',
 );
