@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Modal, ScrollView, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { AccountError } from './donor-controls';
 import { QrScannerCard } from './qr-scanner-card';
 import { getFirebaseClients } from '@/lib/firebase';
@@ -82,23 +83,28 @@ export function DonorPickupScanner({
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={close}>
       {visible && (
-        <ScrollView contentContainerStyle={{ padding: 20, gap: 12 }}>
-          {error ? <AccountError message={error} /> : null}
-          {busy ? (
-            <View>
-              <ActivityIndicator />
-              <Text>Checking donation ownership…</Text>
-            </View>
-          ) : null}
-          <QrScannerCard
-            key={attempt}
-            disabled={busy}
-            onCancel={close}
-            onScanSuccess={(id) => {
-              void lookup(id);
-            }}
-          />
-        </ScrollView>
+        <SafeAreaView style={{ flex: 1 }}>
+          <ScrollView
+            contentContainerStyle={{ padding: 16, gap: 12 }}
+            keyboardShouldPersistTaps="handled"
+          >
+            {error ? <AccountError message={error} /> : null}
+            {busy ? (
+              <View>
+                <ActivityIndicator />
+                <Text>Checking donation ownership…</Text>
+              </View>
+            ) : null}
+            <QrScannerCard
+              key={attempt}
+              disabled={busy}
+              onCancel={close}
+              onScanSuccess={(id) => {
+                void lookup(id);
+              }}
+            />
+          </ScrollView>
+        </SafeAreaView>
       )}
     </Modal>
   );
