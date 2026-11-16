@@ -482,6 +482,7 @@ export interface ListingPage {
 }
 export interface ListingPageOptions {
   after?: QueryDocumentSnapshot<DocumentData>;
+  limit?: number;
 }
 
 export function subscribeToOpenListings(
@@ -492,6 +493,7 @@ export function subscribeToOpenListings(
   const { db } = getFirebaseClients();
   let stop: Unsubscribe | undefined;
   let active = true;
+  const pageSize = options.limit ?? 50;
   function listen() {
     stop?.();
     const q = query(
@@ -500,7 +502,7 @@ export function subscribeToOpenListings(
       where('pickupDeadline', '>', Timestamp.now()),
       orderBy('pickupDeadline', 'asc'),
       ...(options.after ? [startAfter(options.after)] : []),
-      limit(50),
+      limit(pageSize),
     );
     stop = onSnapshot(
       q,
@@ -516,7 +518,10 @@ export function subscribeToOpenListings(
         onUpdate(items, {
           fromCache: snapshot.metadata.fromCache,
           hasPendingWrites: snapshot.metadata.hasPendingWrites,
-          nextCursor: snapshot.docs.length === 50 ? snapshot.docs[49] : null,
+          nextCursor:
+            snapshot.docs.length === pageSize
+              ? snapshot.docs[pageSize - 1]
+              : null,
         });
       },
       onError,
@@ -539,12 +544,13 @@ export function subscribeToProviderListings(
   options: ListingPageOptions = {},
 ): Unsubscribe {
   const { db } = getFirebaseClients();
+  const pageSize = options.limit ?? 50;
   const q = query(
     collection(db, 'foodListings'),
     where('providerUid', '==', providerUid),
     orderBy('createdAt', 'desc'),
     ...(options.after ? [startAfter(options.after)] : []),
-    limit(50),
+    limit(pageSize),
   );
   return onSnapshot(
     q,
@@ -557,7 +563,10 @@ export function subscribeToProviderListings(
         {
           fromCache: snapshot.metadata.fromCache,
           hasPendingWrites: snapshot.metadata.hasPendingWrites,
-          nextCursor: snapshot.docs.length === 50 ? snapshot.docs[49] : null,
+          nextCursor:
+            snapshot.docs.length === pageSize
+              ? snapshot.docs[pageSize - 1]
+              : null,
         },
       );
     },

@@ -22,6 +22,7 @@ import { DonorListingForm } from '@/components/donor-listing-form';
 import { DonorListingsFeed } from '@/components/donor-listings-feed';
 import { DonorPickupScanner } from '@/components/donor-pickup-scanner';
 import { DonorPickupScreen } from '@/components/donor-pickup-screen';
+import { PermissionManagerCard } from '@/components/permission-manager-card';
 import { useDonorProfile } from '@/hooks/use-donor-profile';
 import { signOutAccount } from '@/lib/auth';
 import { submitProfile } from '@/lib/verification';
@@ -406,6 +407,8 @@ export function DonorProfile({ user }: { user: User }) {
                   />
                 </View>
               </View>
+
+              <PermissionManagerCard />
             </ScrollView>
           )}
         </View>

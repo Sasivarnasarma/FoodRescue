@@ -174,37 +174,51 @@ export function DonorListingForm({
     values: readonly T[],
     current: T,
     change: (v: T) => void,
+    horizontal?: boolean,
   ) {
+    const chips = (
+      <View
+        style={horizontal ? styles.choiceChipsScrollRow : styles.choiceChipsRow}
+      >
+        {values.map((value) => {
+          const isSelected = current === value;
+          return (
+            <TouchableOpacity
+              key={value}
+              accessibilityRole="button"
+              accessibilityState={{ selected: isSelected }}
+              style={[styles.choiceChip, isSelected && styles.choiceChipActive]}
+              disabled={busy}
+              onPress={() => change(value)}
+            >
+              <Text
+                style={[
+                  styles.choiceChipText,
+                  isSelected && styles.choiceChipTextActive,
+                ]}
+              >
+                {isSelected ? `✓ ${value}` : value}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    );
+
     return (
       <View style={styles.choiceGroup}>
         <Text style={styles.sectionLabel}>{label}</Text>
-        <View style={styles.choiceChipsRow}>
-          {values.map((value) => {
-            const isSelected = current === value;
-            return (
-              <TouchableOpacity
-                key={value}
-                accessibilityRole="button"
-                accessibilityState={{ selected: isSelected }}
-                style={[
-                  styles.choiceChip,
-                  isSelected && styles.choiceChipActive,
-                ]}
-                disabled={busy}
-                onPress={() => change(value)}
-              >
-                <Text
-                  style={[
-                    styles.choiceChipText,
-                    isSelected && styles.choiceChipTextActive,
-                  ]}
-                >
-                  {isSelected ? `✓ ${value}` : value}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+        {horizontal ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.choiceChipsScrollContainer}
+          >
+            {chips}
+          </ScrollView>
+        ) : (
+          chips
+        )}
       </View>
     );
   }
@@ -245,7 +259,7 @@ export function DonorListingForm({
           multiline
           editable={!busy}
         />
-        {choices('Category', FOOD_CATEGORIES, category, setCategory)}
+        {choices('Category', FOOD_CATEGORIES, category, setCategory, true)}
         <View style={styles.quantityRow}>
           <View style={styles.quantityColumn}>
             <AccountField
@@ -262,6 +276,7 @@ export function DonorListingForm({
               ['pack', 'portion', 'item', 'g'] as const,
               unit,
               setUnit,
+              true,
             )}
           </View>
         </View>
@@ -322,6 +337,7 @@ export function DonorListingForm({
             { label: '+30m', offsetMinutes: 30 },
             { label: '+1 Hour', offsetMinutes: 60 },
             { label: '+2 Hours', offsetMinutes: 120 },
+            { label: '+4 Hours', offsetMinutes: 240 },
           ]}
         />
         <DateTimePickerField
@@ -331,6 +347,7 @@ export function DonorListingForm({
           editable={!busy}
           minDate={new Date()}
           presets={[
+            { label: '+1 Hour', offsetMinutes: 60 },
             { label: '+2 Hours', offsetMinutes: 120 },
             { label: '+4 Hours', offsetMinutes: 240 },
             { label: '+8 Hours', offsetMinutes: 480 },
@@ -464,6 +481,15 @@ const styles = StyleSheet.create({
   choiceChipsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    gap: 8,
+  },
+  choiceChipsScrollContainer: {
+    paddingVertical: 4,
+    paddingRight: 16,
+  },
+  choiceChipsScrollRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
   },
   choiceChip: {
