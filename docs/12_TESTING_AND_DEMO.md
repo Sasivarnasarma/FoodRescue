@@ -24,3 +24,17 @@
 6. Explain why the top-ranked organization was suggested and demonstrate a stale or repeated pickup being rejected.
 
 Rehearse using synthetic data, fresh pickup windows, valid clocks, working network and camera permissions. Use manual location/reference entry and the bundled image fallback if needed. A seeded competing request must be created with the actual listing ID and valid times before showing rankings. Test the scoring function and Firestore Rules locally before the live demo. This repository currently contains the plan and starter Firebase config.
+
+## Recipient donation detail regression check
+
+On Android, sign in as an approved organization, open Browse Food and tap a
+donation. Confirm the detail panel fills the space between the app header and
+bottom navigation, displays the title and Back to Feed action, and scrolls down
+to the request section. Test with and without a listing photo, then return and
+open a different donation. Repeat by selecting a donation from My Requests.
+
+While details are loading, the loading message and Back to donations action must
+remain visible. If the donation is removed or access is denied, verify the
+unavailable message and Back action appear. Repeat at a small screen size and
+with an offline cached listing. Native layout still requires device verification;
+TypeScript and data-logic tests do not exercise Android layout measurement.
