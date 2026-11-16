@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -14,6 +14,8 @@ import {
   accountErrorMessage,
   donorColors,
 } from '@/components/donor-controls';
+import { useCurrentTime } from '@/hooks/use-current-time';
+import { subscribeToListing } from '@/lib/listings';
 import type {
   FoodListing,
   ListingPage,
@@ -21,6 +23,7 @@ import type {
 } from '@/lib/listings';
 import {
   rankListingRequests,
+  checkRequestEligibility,
   explainRankingComparison,
 } from '@/lib/request-ranking';
 import {
@@ -35,9 +38,39 @@ export interface DonorIncomingRequestsProps {
 }
 
 export function DonorIncomingRequests({
-  listing,
+  listing: initialListing,
   onBack,
 }: DonorIncomingRequestsProps) {
+  const now = useCurrentTime();
+  const approvalLock = useRef(false);
+  const [parentAttempt, setParentAttempt] = useState(0);
+  const [live, setLive] = useState<{
+    listing: FoodListing | null;
+    fromCache: boolean;
+    hasPendingWrites: boolean;
+    error?: string;
+  }>();
+  const listing = live?.listing ?? initialListing;
+  useEffect(() => {
+    return subscribeToListing(
+      initialListing.id,
+      (value, metadata) => {
+        setLive({
+          listing: value,
+          ...metadata,
+          error: value ? undefined : 'This donation is no longer available.',
+        });
+      },
+      (error) => {
+        setLive({
+          listing: null,
+          fromCache: true,
+          hasPendingWrites: false,
+          error: error.message,
+        });
+      },
+    );
+  }, [initialListing.id, parentAttempt]);
   const [requests, setRequests] = useState<DonationRequest[]>([]);
   const [page, setPage] = useState<ListingPage>();
   const [cursors, setCursors] = useState<ListingPageOptions[]>([{}]);
@@ -53,10 +86,8 @@ export function DonorIncomingRequests({
   const [expandedDetailsId, setExpandedDetailsId] = useState<string | null>(
     null,
   );
-  const [listingStatus, setListingStatus] = useState(listing.status);
-  const [assignedOrgUid, setAssignedOrgUid] = useState<string | undefined>(
-    listing.acceptedOrganizationUid,
-  );
+  const listingStatus = listing.status;
+  const assignedOrgUid = listing.acceptedOrganizationUid;
   const [successNotice, setSuccessNotice] = useState<string | null>(null);
 
   // Subscribe to real-time incoming requests for this listing
@@ -98,15 +129,35 @@ export function DonorIncomingRequests({
 
   // Compute smart matching ranking
   const rankedResult = useMemo(
-    () => rankListingRequests(listing, requests, new Date()),
-    [listing, requests],
+    () => rankListingRequests(listing, requests, now),
+    [listing, requests, now],
   );
 
   const isAssigned = listingStatus === 'assigned';
-  const isOffline = Boolean(page?.fromCache);
-  const isPendingWrites = Boolean(page?.hasPendingWrites);
+  const isOffline = !live || live.fromCache || Boolean(page?.fromCache);
+  const isPendingWrites = Boolean(
+    page?.hasPendingWrites || live?.hasPendingWrites,
+  );
+  const approvalsBlocked =
+    !live?.listing ||
+    !page ||
+    !!live.error ||
+    !!errorMessage ||
+    loading ||
+    listingStatus !== 'open' ||
+    !listing.pickupDeadline ||
+    now.getTime() + 15 * 60000 > listing.pickupDeadline.getTime() ||
+    isOffline ||
+    isPendingWrites ||
+    !!approvingId;
 
   const handleApprovePress = (request: DonationRequest) => {
+    if (approvalLock.current || approvalsBlocked) return;
+    const eligibility = checkRequestEligibility(listing, request, new Date());
+    if (!eligibility.isEligible) {
+      setErrorMessage(eligibility.reasons.join(' '));
+      return;
+    }
     if (isAssigned) {
       Alert.alert(
         'Listing Already Assigned',
@@ -130,19 +181,30 @@ export function DonorIncomingRequests({
   };
 
   const handleConfirmApproval = async () => {
-    if (!confirmRequest) return;
-    const target = confirmRequest;
+    if (!confirmRequest || approvalLock.current || approvalsBlocked) return;
+    const target = requests.find(
+      (item) => item.organizationUid === confirmRequest.organizationUid,
+    );
+    if (
+      !target ||
+      !checkRequestEligibility(listing, target, new Date()).isEligible
+    ) {
+      setConfirmRequest(null);
+      setErrorMessage(
+        'This request is no longer eligible. Refresh and review the latest requests.',
+      );
+      return;
+    }
+    approvalLock.current = true;
     setConfirmRequest(null);
     setApprovingId(target.organizationUid);
     setErrorMessage(null);
 
     try {
       await approveDonationRequest(listing.id, target.organizationUid);
-      setListingStatus('assigned');
-      setAssignedOrgUid(target.organizationUid);
       const recipientName = target.organizationName || target.organizationUid;
       setSuccessNotice(
-        `Donation assigned to ${recipientName}. The recipient has been notified to proceed with pickup.`,
+        `Donation assigned to ${recipientName}. The assignment is saved and will appear in the recipient app.`,
       );
       Alert.alert(
         'Donation Assigned',
@@ -158,6 +220,7 @@ export function DonorIncomingRequests({
       setErrorMessage(msg);
       Alert.alert('Approval Failed', msg);
     } finally {
+      approvalLock.current = false;
       setApprovingId(null);
     }
   };
@@ -215,7 +278,12 @@ export function DonorIncomingRequests({
                 isAssigned ? styles.badgeAssignedText : styles.badgeOpenText,
               ]}
             >
-              {isAssigned ? 'Assigned' : 'Open'}
+              {listing.pickupDeadline &&
+              listing.pickupDeadline.getTime() <= now.getTime() &&
+              listing.status === 'open'
+                ? 'Expired'
+                : listingStatus.charAt(0).toUpperCase() +
+                  listingStatus.slice(1)}
             </Text>
           </View>
         </View>
@@ -275,6 +343,21 @@ export function DonorIncomingRequests({
         </View>
       )}
 
+      {live?.error && (
+        <View>
+          <AccountError message={live.error} />
+          <TouchableOpacity
+            accessibilityRole="button"
+            onPress={() => setParentAttempt((v) => v + 1)}
+          >
+            <Text>Retry donation status</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+      <Text>
+        Recommendations compare requests on this page. Current account
+        eligibility is checked when approval is saved.
+      </Text>
       {/* Error Banner */}
       {errorMessage && (
         <View style={styles.errorBox}>
@@ -294,7 +377,7 @@ export function DonorIncomingRequests({
           <Text style={styles.assignedBannerTitle}>Donation Assigned</Text>
           <Text style={styles.assignedBannerBody}>
             Assigned to recipient UID: {assignedOrgUid}.{'\n'}Further approvals
-            are locked. The recipient can now proceed with QR handover.
+            are locked. The recipient can review pickup details in the app.
           </Text>
         </View>
       )}
@@ -307,7 +390,13 @@ export function DonorIncomingRequests({
         </View>
       ) : requests.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyTitle}>No Requests Yet</Text>
+          <Text style={styles.emptyTitle}>No requests on this page</Text>
+          <TouchableOpacity
+            accessibilityRole="button"
+            onPress={() => setCursors([{}])}
+          >
+            <Text>Return to first page</Text>
+          </TouchableOpacity>
           <Text style={styles.emptySubtitle}>
             Verified recipient organizations browsing nearby donations will
             appear here when they submit a request.
@@ -451,11 +540,10 @@ export function DonorIncomingRequests({
                       <View style={styles.cardActionRow}>
                         <TouchableOpacity
                           accessibilityRole="button"
-                          disabled={isApproving || isOffline || isPendingWrites}
+                          disabled={approvalsBlocked}
                           style={[
                             styles.approveButton,
-                            (isApproving || isOffline || isPendingWrites) &&
-                              styles.buttonDisabled,
+                            approvalsBlocked && styles.buttonDisabled,
                           ]}
                           onPress={() => handleApprovePress(item.request)}
                         >
@@ -536,12 +624,11 @@ export function DonorIncomingRequests({
                       <View style={styles.cardActionRow}>
                         <TouchableOpacity
                           accessibilityRole="button"
-                          disabled={isApproving || isOffline || isPendingWrites}
+                          disabled={approvalsBlocked}
                           style={[
                             styles.approveButton,
                             styles.approveButtonSecondary,
-                            (isApproving || isOffline || isPendingWrites) &&
-                              styles.buttonDisabled,
+                            approvalsBlocked && styles.buttonDisabled,
                           ]}
                           onPress={() => handleApprovePress(item.request)}
                         >
@@ -685,6 +772,8 @@ export function DonorIncomingRequests({
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.modalConfirmButton}
+                accessibilityRole="button"
+                disabled={approvalsBlocked}
                 onPress={handleConfirmApproval}
               >
                 <Text style={styles.modalConfirmText}>Confirm & Assign</Text>

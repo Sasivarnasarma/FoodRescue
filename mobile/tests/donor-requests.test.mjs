@@ -116,22 +116,29 @@ test('ranks request with larger buffer ahead of closer request per spec example'
   );
 
   // Verify raw scores match doc 08 calculation
-  const scoreCloseLate = calculateRequestScore(listing, reqCloseLate, evaluationTime);
-  const scoreFarEarly = calculateRequestScore(listing, reqFarEarly, evaluationTime);
+  const scoreCloseLate = calculateRequestScore(
+    listing,
+    reqCloseLate,
+    evaluationTime,
+  );
+  const scoreFarEarly = calculateRequestScore(
+    listing,
+    reqFarEarly,
+    evaluationTime,
+  );
   assert.ok(Math.abs(scoreCloseLate.totalScore - 61.3) < 0.2);
   assert.equal(scoreFarEarly.totalScore, 76.0);
   assert.ok(scoreFarEarly.totalScore > scoreCloseLate.totalScore);
 
-  // When ranked through rankListingRequests, 11:50 has buffer < 15 min so it is partitioned as ineligible
+  // Both proposals are valid; the 15-minute cutoff concerns approval time.
   const result = rankListingRequests(
     listing,
     [reqCloseLate, reqFarEarly],
     evaluationTime,
   );
-  assert.equal(result.rankedEligible.length, 1);
+  assert.equal(result.rankedEligible.length, 2);
   assert.equal(result.rankedEligible[0].request.organizationUid, 'far-early');
-  assert.equal(result.ineligible.length, 1);
-  assert.equal(result.ineligible[0].request.organizationUid, 'close-late');
+  assert.equal(result.ineligible.length, 0);
 
   // Now test with both eligible (e.g. 11:40 buffer = 20m vs 11:30 buffer = 30m)
   const reqCloseEligible = createMockRequest(
@@ -145,8 +152,14 @@ test('ranks request with larger buffer ahead of closer request per spec example'
     evaluationTime,
   );
   assert.equal(eligibleResult.rankedEligible.length, 2);
-  assert.equal(eligibleResult.rankedEligible[0].request.organizationUid, 'far-early');
-  assert.equal(eligibleResult.rankedEligible[1].request.organizationUid, 'close-eligible');
+  assert.equal(
+    eligibleResult.rankedEligible[0].request.organizationUid,
+    'far-early',
+  );
+  assert.equal(
+    eligibleResult.rankedEligible[1].request.organizationUid,
+    'close-eligible',
+  );
   assert.equal(eligibleResult.rankedEligible[0].breakdown.totalScore, 76.0);
   assert.equal(eligibleResult.rankedEligible[1].breakdown.totalScore, 74.7);
 
@@ -221,10 +234,10 @@ test('partitions withdrawn and ineligible requests with specific failure reasons
     { latitude: 6.93, longitude: 79.86 },
   );
 
-  // 4. Proposed pickup leaves fewer than 15 minutes before deadline
+  // 4. Proposed pickup is after the deadline
   const reqTooLate = createMockRequest(
     'org-too-late',
-    new Date('2026-11-16T11:50:00Z'), // only 10 min buffer
+    new Date('2026-11-16T12:01:00Z'), // after the window
     { latitude: 6.93, longitude: 79.86 },
   );
 
@@ -241,7 +254,7 @@ test('partitions withdrawn and ineligible requests with specific failure reasons
   assert.ok(reasons.some((r) => r.includes('withdrawn')));
   assert.ok(reasons.some((r) => r.includes('storage')));
   assert.ok(reasons.some((r) => r.includes('past')));
-  assert.ok(reasons.some((r) => r.includes('at least 15 minutes required')));
+  assert.ok(reasons.some((r) => r.includes('after the pickup deadline')));
 });
 
 test('evaluates listing urgency levels based on deadline buffer', () => {

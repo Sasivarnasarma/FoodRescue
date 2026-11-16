@@ -1,6 +1,6 @@
 # Phase 3 request data and approval integration
 
-Member 3 provides rules and shared mobile data helpers. Request forms, donor screens, location input and scoring remain the other members' tasks.
+All five Phase 3 implementations are integrated: request rules/data helpers, recipient request and history screens, donor approval, ranking and departure-location selection. Live two-phone acceptance remains pending.
 
 ## Contract
 
@@ -92,3 +92,5 @@ Features:
 - Offline and boundary guards: Disables approval when offline (`fromCache`), when pending writes are active, or when fewer than 15 minutes remain before the deadline.
 - Unit tests in `mobile/tests/donor-requests.test.mjs` verify ranking ordering, tie-breaking, missing coordinate partitioning, eligibility filtering, and natural-language explanations.
 
+
+Donor review observes the listing directly, refreshes timing eligibility while open, and rechecks the selected request when confirmation is saved. An approval in another session, cancellation, expiry, cached metadata or pending writes disables further approvals. Ranking is scoped to the current bounded request page; server rules remain authoritative for account eligibility.
