@@ -1,6 +1,6 @@
 # Phase 3 request data and approval integration
 
-Member 3 provides rules and shared mobile data helpers. Request forms, donor screens, location input and scoring remain the other members' tasks.
+All five Phase 3 implementations are integrated: request rules/data helpers, recipient request and history screens, donor approval, ranking and departure-location selection. Live two-phone acceptance remains pending.
 
 ## Contract
 
@@ -76,3 +76,21 @@ Member 2 implemented the mobile recipient request flow:
 - `mobile/tests/recipient-requests.test.mjs`: unit tests for pickup proposal timing, storage confirmation, coordinate bounds, and derived state transitions.
 
 Review integration: the recipient form uses the shared departure card. Request history observes parent listings as well as request documents, supports bounded pages, and blocks mutations on cached or pending data. Expiry labels refresh while screens remain open; cancelled, collected and expired parents override stale approval displays. Physical-device acceptance is still pending.
+
+## Donor incoming requests and approval screen (Member 1)
+
+Member 1 implements the donor incoming requests screen in `mobile/src/components/donor-incoming-requests.tsx`, integrated with the donor's donations feed in `mobile/src/components/donor-listings-feed.tsx` and `mobile/src/components/donor-profile.tsx`.
+
+Features:
+
+- Real-time incoming request listener using `subscribeToListingRequests` with cache/offline and pending-write indicators, bounded pagination, and graceful loading/empty/error states.
+- Client-side deterministic Smart Matching ranking per `docs/08_SMART_MATCHING_ENGINE.md`: 60% distance score (normalized by 10 km) + 40% pickup buffer score (normalized by 30 min before deadline).
+- Transparent ranking explanations: Shows breakdown of straight-line distance, proposed pickup buffer, affirmed storage capability, and comparative rationale explaining why the #1 recommendation ranks above lower-ranked requests.
+- Structured request partitioning: Recommended eligible requests, requests with missing departure coordinates requiring manual donor assessment, and ineligible/withdrawn requests with explicit failure reasons.
+- Confirmation dialog before approval: Confirms full-quantity allocation and warns that other pending requests will no longer be eligible.
+- Atomic approval transaction via `approveDonationRequest`: Atomically transitions listing to `assigned` and selected request to `approved` with reciprocal Firestore security checks.
+- Offline and boundary guards: Disables approval when offline (`fromCache`), when pending writes are active, or when fewer than 15 minutes remain before the deadline.
+- Unit tests in `mobile/tests/donor-requests.test.mjs` verify ranking ordering, tie-breaking, missing coordinate partitioning, eligibility filtering, and natural-language explanations.
+
+
+Donor review observes the listing directly, refreshes timing eligibility while open, and rechecks the selected request when confirmation is saved. An approval in another session, cancellation, expiry, cached metadata or pending writes disables further approvals. Ranking is scoped to the current bounded request page; server rules remain authoritative for account eligibility.

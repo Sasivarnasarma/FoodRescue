@@ -44,13 +44,13 @@ Implementation is integrated into main through reviewed feature branches. Physic
 
 | Member | Work | Status |
 |---|---|---|
-| 1 | Build the donor's incoming request list, ranking explanation, and approval screen. | Pending |
+| 1 | Build the donor's incoming request list, ranking explanation, and approval screen. | Done |
 | 2 | Build whole-listing requests. Include proposed pickup time and storage confirmation. Show withdrawal and approval status. | Done |
 | 3 | Implement request rules and the atomic approval transaction. Ensure only one organization can be assigned. | Done |
 | 4 | Implement request scoring by distance and pickup timing, with storage compatibility as an eligibility check. Verify scoring with two competing requests. | Done |
 | 5 | Connect GPS or manual coordinates to the recipient's proposed departure point. Handle unavailable distance in coordination with Members 2 and 4. | Done |
 
-Members 3, 4 and 5 provide request rules, ranking and departure-location helpers. Recipient request screens are implemented. Donor screens and physical-device integration are still pending. See [request integration](18_REQUESTS_AND_APPROVAL.md).
+Members 3, 4 and 5 provide request rules, ranking and departure-location helpers. All Phase 3 implementations are integrated. Physical-device acceptance and live-project rehearsal remain pending. See [request integration](18_REQUESTS_AND_APPROVAL.md).
 
 **Ready when** a donor can explain the order of two requests, approve one, and see the assignment update on the recipient's phone.
 

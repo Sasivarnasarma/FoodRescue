@@ -20,11 +20,13 @@ import { getFirebaseClients } from '../lib/firebase';
 interface DonorListingsFeedProps {
   onCreatePress: () => void;
   onEditDraft: (listing: FoodListing) => void;
+  onViewRequests?: (listing: FoodListing) => void;
 }
 
 export function DonorListingsFeed({
   onCreatePress,
   onEditDraft,
+  onViewRequests,
 }: DonorListingsFeedProps) {
   const [page, setPage] = useState<ListingPage>();
   const [cursors, setCursors] = useState<ListingPageOptions[]>([{}]);
@@ -191,6 +193,13 @@ export function DonorListingsFeed({
       {item.status === 'open' && (
         <View style={styles.cardActions}>
           <TouchableOpacity
+            accessibilityRole="button"
+            style={styles.reviewRequestsButton}
+            onPress={() => onViewRequests?.(item)}
+          >
+            <Text style={styles.reviewRequestsText}>Review Requests</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
             style={styles.cancelActionButton}
             onPress={() => handleCancelListing(item)}
             disabled={
@@ -202,6 +211,19 @@ export function DonorListingsFeed({
             ) : (
               <Text style={styles.cancelActionText}>Cancel Listing</Text>
             )}
+          </TouchableOpacity>
+        </View>
+      )}
+      {item.status === 'assigned' && (
+        <View style={styles.cardActions}>
+          <TouchableOpacity
+            accessibilityRole="button"
+            style={styles.reviewRequestsButton}
+            onPress={() => onViewRequests?.(item)}
+          >
+            <Text style={styles.reviewRequestsText}>
+              View Requests / Assignment
+            </Text>
           </TouchableOpacity>
         </View>
       )}
@@ -428,7 +450,23 @@ const styles = StyleSheet.create({
   },
   cardActions: {
     marginTop: 10,
-    alignItems: 'flex-end',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+  },
+  reviewRequestsButton: {
+    backgroundColor: '#e1f3e8',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+  },
+  reviewRequestsText: {
+    color: '#167044',
+    fontSize: 13,
+    fontWeight: '700',
   },
   cancelActionButton: {
     paddingVertical: 4,
