@@ -46,6 +46,7 @@ export default function ReviewDialog({
     error?: string;
   }>();
   const lock = useRef(false);
+
   useEffect(() => {
     const { db } = getFirebaseClients();
     return onSnapshot(
@@ -67,6 +68,7 @@ export default function ReviewDialog({
         }),
     );
   }, [profile.uid]);
+
   const ready =
     available &&
     !!source &&
@@ -113,49 +115,87 @@ export default function ReviewDialog({
       maxWidth="sm"
       aria-labelledby="review-dialog-title"
       onClose={pending ? undefined : onClose}
+      slotProps={{
+        paper: {
+          sx: {
+            borderRadius: '6px',
+            border: '1px solid #E2E8F0',
+          },
+        },
+      }}
     >
       <form onSubmit={(event) => void handleSubmit(event)}>
-        <DialogTitle id="review-dialog-title">{verb} profile</DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{ pt: 1 }}>
-            <Typography sx={{ overflowWrap: 'anywhere' }}>
-              {verb} {profile.name} ({profile.role}). This decision is recorded
-              in the audit history.
-            </Typography>
+        <DialogTitle
+          id="review-dialog-title"
+          sx={{
+            fontWeight: 700,
+            fontSize: '1rem',
+            color: '#0F172A',
+            borderBottom: '1px solid #E2E8F0',
+            py: 1.75,
+            px: 3,
+          }}
+        >
+          {verb} Organization Registration
+        </DialogTitle>
+        <DialogContent sx={{ p: 3, pt: 2.5 }}>
+          <Stack spacing={2}>
+            <Box
+              sx={{
+                p: 2,
+                borderRadius: '4px',
+                backgroundColor: '#F8FAFC',
+                border: '1px solid #E2E8F0',
+              }}
+            >
+              <Typography variant="body2" sx={{ color: '#334155' }}>
+                You are about to{' '}
+                {decision === 'approved' ? 'approve' : 'reject'}{' '}
+                <strong>{profile.name}</strong> ({profile.role}). This action
+                will be permanently logged in the audit trail.
+              </Typography>
+            </Box>
 
             {previousReason && (
-              <Alert severity="info">
+              <Alert severity="info" sx={{ borderRadius: '4px' }}>
                 <Typography
                   variant="caption"
                   sx={{ fontWeight: 700, display: 'block' }}
                 >
-                  Previous Rejection Feedback:
+                  Previous Rejection Reason:
                 </Typography>
                 <Typography variant="body2">{previousReason}</Typography>
               </Alert>
             )}
 
             {decision === 'approved' && (
-              <Alert severity="success">
-                Approving this profile will grant verification to the account
-                and clear any previous rejection feedback.
+              <Alert severity="success" sx={{ borderRadius: '4px' }}>
+                Approving this profile grants verification to the account and
+                clears any previous rejection feedback.
               </Alert>
             )}
 
             {!ready && !pending && (
-              <Alert severity="warning">
-                Waiting for current profile information. Reconnect or close and
-                retry if the profile is unavailable.
+              <Alert severity="warning" sx={{ borderRadius: '4px' }}>
+                Waiting for current profile information from server…
               </Alert>
             )}
 
-            {source?.error && <Alert severity="error">{source.error}</Alert>}
-            {error && <Alert severity="error">{error}</Alert>}
+            {source?.error && (
+              <Alert severity="error" sx={{ borderRadius: '4px' }}>
+                {source.error}
+              </Alert>
+            )}
+            {error && (
+              <Alert severity="error" sx={{ borderRadius: '4px' }}>
+                {error}
+              </Alert>
+            )}
 
             {decision === 'rejected' && (
-              <Box>
+              <Box sx={{ mt: 1 }}>
                 <TextField
-                  label="Rejection reason / feedback"
+                  label="Rejection feedback / reason"
                   name="reason"
                   value={reason}
                   onChange={(event) => setReason(event.target.value)}
@@ -163,28 +203,52 @@ export default function ReviewDialog({
                   required
                   fullWidth
                   multiline
-                  minRows={2}
+                  minRows={3}
                   autoFocus
-                  slotProps={{ htmlInput: { maxLength: 500 } }}
-                  helperText={`${reason.length}/500 characters${validation.error ? ` — ${validation.error}` : ``}`}
+                  slotProps={{
+                    htmlInput: { maxLength: 500 },
+                  }}
+                  helperText={`${reason.length}/500 characters${validation.error ? ` — ${validation.error}` : ''}`}
                   error={!validation.valid && reason.length > 0}
                 />
               </Box>
             )}
           </Stack>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={onClose} disabled={pending}>
+        <DialogActions
+          sx={{
+            py: 1.5,
+            px: 3,
+            borderTop: '1px solid #E2E8F0',
+            backgroundColor: '#FAFAFA',
+          }}
+        >
+          <Button
+            onClick={onClose}
+            disabled={pending}
+            variant="outlined"
+            size="small"
+            sx={{ color: '#475569' }}
+          >
             Cancel
           </Button>
           <Button
             type="submit"
             variant="contained"
+            size="small"
             color={decision === 'approved' ? 'primary' : 'error'}
             disabled={!validReason || !ready}
             loading={pending}
+            sx={
+              decision === 'approved'
+                ? {
+                    backgroundColor: '#167044',
+                    '&:hover': { backgroundColor: '#115533' },
+                  }
+                : undefined
+            }
           >
-            Confirm {verb.toLowerCase()}
+            Confirm {verb}
           </Button>
         </DialogActions>
       </form>

@@ -1,6 +1,13 @@
 import type { User } from 'firebase/auth';
 import { useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 import {
   AccountButton,
@@ -47,7 +54,7 @@ export function DonorProfile({ user }: { user: User }) {
   const [scannerVisible, setScannerVisible] = useState(false);
   const [viewMode, setViewMode] = useState<
     'profile' | 'feed' | 'create' | 'requests' | 'pickup'
-  >('profile');
+  >('feed');
   const [message, setMessage] = useState('');
 
   async function submit() {
@@ -180,6 +187,11 @@ export function DonorProfile({ user }: { user: User }) {
     }
     return (
       <View style={styles.statusPanel}>
+        {status === 'approved' && (
+          <View style={styles.verifiedBadge}>
+            <Text style={styles.verifiedText}>✓ Verified Donor Partner</Text>
+          </View>
+        )}
         <Text style={styles.business}>{profile.data.name}</Text>
         <Text
           accessibilityLiveRegion="polite"
@@ -193,25 +205,64 @@ export function DonorProfile({ user }: { user: User }) {
           {statusCopy[status].title}
         </Text>
         <Text style={styles.body}>{statusCopy[status].description}</Text>
+
         {status === 'approved' && (
-          <View style={{ marginTop: 14, gap: 8 }}>
-            <AccountButton
-              label="+ Post New Food Donation"
+          <View style={{ marginTop: 14, gap: 10 }}>
+            <Pressable
+              accessibilityRole="button"
               onPress={() => {
                 setEditing(undefined);
                 setViewMode('create');
               }}
-            />
-            <AccountButton
-              label="View & Manage Donations"
-              onPress={() => setViewMode('feed')}
-              secondary
-            />
-            <AccountButton
-              label="📷 Scan Pickup QR / Handover"
-              onPress={() => setScannerVisible(true)}
-              secondary
-            />
+              style={({ pressed }) => [
+                styles.heroActionCard,
+                pressed && styles.cardPressed,
+              ]}
+            >
+              <View style={styles.heroActionIcon}>
+                <Text style={{ fontSize: 20, color: '#FFFFFF' }}>➕</Text>
+              </View>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={styles.heroActionTitle}>
+                  Post New Food Donation
+                </Text>
+                <Text style={styles.heroActionDesc}>
+                  List surplus food for verified charities in under 2 minutes
+                </Text>
+              </View>
+            </Pressable>
+
+            <View style={styles.actionGrid}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setViewMode('feed')}
+                style={({ pressed }) => [
+                  styles.tileActionCard,
+                  pressed && styles.cardPressed,
+                ]}
+              >
+                <Text style={{ fontSize: 22, marginBottom: 4 }}>📋</Text>
+                <Text style={styles.tileTitle}>Manage Listings</Text>
+                <Text style={styles.tileDesc}>
+                  Active food & incoming requests
+                </Text>
+              </Pressable>
+
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setScannerVisible(true)}
+                style={({ pressed }) => [
+                  styles.tileActionCard,
+                  pressed && styles.cardPressed,
+                ]}
+              >
+                <Text style={{ fontSize: 22, marginBottom: 4 }}>📷</Text>
+                <Text style={styles.tileTitle}>Scan Pickup QR</Text>
+                <Text style={styles.tileDesc}>
+                  Verify handover with recipient
+                </Text>
+              </Pressable>
+            </View>
           </View>
         )}
         {status === 'rejected' && (
@@ -230,75 +281,261 @@ export function DonorProfile({ user }: { user: User }) {
     account?.data?.accountStatus === 'active' &&
     profile?.data?.verificationStatus === 'approved' &&
     !fromCache;
-  if (canManage && viewMode === 'create') {
-    return (
-      <DonorListingForm
-        key={editing?.id ?? 'new'}
-        initialListing={editing}
-        onSuccess={() => {
-          setNotice('Donation saved successfully.');
-          setViewMode('feed');
-        }}
-        onCancel={() => setViewMode('profile')}
-      />
-    );
-  }
 
-  if (canManage && viewMode === 'requests' && selectedListing) {
+  if (canManage && profile?.data) {
     return (
-      <View style={{ flex: 1, minHeight: 450 }}>
-        <DonorIncomingRequests
-          listing={selectedListing}
-          onBack={() => setViewMode('feed')}
-        />
-      </View>
-    );
-  }
-
-  if (canManage && viewMode === 'pickup' && selectedListing) {
-    return (
-      <View style={{ flex: 1, minHeight: 450 }}>
-        <DonorPickupScreen
-          key={selectedListing.id}
-          listing={selectedListing}
-          onBack={() => setViewMode('feed')}
-        />
-      </View>
-    );
-  }
-
-  if (canManage && viewMode === 'feed') {
-    return (
-      <View style={{ flex: 1, minHeight: 450 }}>
-        {notice && <Text accessibilityLiveRegion="polite">{notice}</Text>}
-        <DonorListingsFeed
-          onCreatePress={() => {
-            setEditing(undefined);
-            setViewMode('create');
-          }}
-          onEditDraft={(listing) => {
-            setEditing(listing);
-            setViewMode('create');
-          }}
-          onViewRequests={(listing) => {
-            setSelectedListing(listing);
-            setViewMode('requests');
-          }}
-          onOpenPickup={(listing) => {
-            setSelectedListing(listing);
-            setViewMode('pickup');
-          }}
-          onScanPress={() => setScannerVisible(true)}
-        />
-        <View style={{ padding: 16 }}>
-          <AccountButton
-            label="Back to Profile"
-            onPress={() => setViewMode('profile')}
-            secondary
-          />
+      <View style={styles.appShell}>
+        {/* Modern Top App Bar */}
+        <View style={styles.appHeader}>
+          <View style={styles.appHeaderLeft}>
+            <View style={styles.appHeaderLogoBadge}>
+              <Text style={{ fontSize: 18 }}>🌱</Text>
+            </View>
+            <View>
+              <Text style={styles.appHeaderBrand}>FoodRescue</Text>
+              <Text style={styles.appHeaderSub} numberOfLines={1}>
+                {profile.data.name}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.appHeaderRight}>
+            <View style={styles.verifiedPartnerBadge}>
+              <Text style={styles.verifiedPartnerText}>✓ Verified Donor</Text>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              onPress={signOut}
+              disabled={!!busy}
+              style={styles.headerSignOutBtn}
+            >
+              <Text style={styles.headerSignOutText}>
+                {busy === 'signout' ? '…' : 'Sign out'}
+              </Text>
+            </Pressable>
+          </View>
         </View>
+
+        {/* Content Body */}
+        <View style={styles.appBody}>
+          {!!notice && (
+            <Text accessibilityLiveRegion="polite" style={styles.noticeBanner}>
+              {notice}
+            </Text>
+          )}
+
+          {viewMode === 'create' && (
+            <DonorListingForm
+              key={editing?.id ?? 'new'}
+              initialListing={editing}
+              onSuccess={() => {
+                setNotice('Donation saved successfully.');
+                setViewMode('feed');
+              }}
+              onCancel={() => setViewMode('feed')}
+            />
+          )}
+
+          {viewMode === 'requests' && selectedListing && (
+            <DonorIncomingRequests
+              listing={selectedListing}
+              onBack={() => setViewMode('feed')}
+            />
+          )}
+
+          {viewMode === 'pickup' && selectedListing && (
+            <DonorPickupScreen
+              key={selectedListing.id}
+              listing={selectedListing}
+              onBack={() => setViewMode('feed')}
+            />
+          )}
+
+          {viewMode === 'feed' && (
+            <DonorListingsFeed
+              onCreatePress={() => {
+                setEditing(undefined);
+                setViewMode('create');
+              }}
+              onEditDraft={(listing) => {
+                setEditing(listing);
+                setViewMode('create');
+              }}
+              onViewRequests={(listing) => {
+                setSelectedListing(listing);
+                setViewMode('requests');
+              }}
+              onOpenPickup={(listing) => {
+                setSelectedListing(listing);
+                setViewMode('pickup');
+              }}
+              onScanPress={() => setScannerVisible(true)}
+            />
+          )}
+
+          {viewMode === 'profile' && (
+            <ScrollView contentContainerStyle={styles.profileTabContent}>
+              <View style={styles.businessProfileCard}>
+                <View style={styles.businessIconBox}>
+                  <Text style={{ fontSize: 32 }}>🏪</Text>
+                </View>
+                <Text style={styles.businessProfileName}>
+                  {profile.data.name}
+                </Text>
+                <View style={styles.verifiedTagRow}>
+                  <Text style={styles.verifiedTagText}>
+                    ✓ Verified Food Provider Partner
+                  </Text>
+                </View>
+                <Text style={styles.businessProfileDesc}>
+                  Your business is verified to post edible surplus food for
+                  community pickup by certified non-profits.
+                </Text>
+                {!!user.email && (
+                  <View style={styles.businessInfoRow}>
+                    <Text style={styles.businessInfoLabel}>Signed in as:</Text>
+                    <Text style={styles.businessInfoValue}>{user.email}</Text>
+                  </View>
+                )}
+                {!!message && <AccountError message={message} />}
+                <View style={{ marginTop: 16, width: '100%' }}>
+                  <AccountButton
+                    label={busy === 'signout' ? 'Signing out…' : 'Sign out'}
+                    disabled={!!busy}
+                    onPress={signOut}
+                    secondary
+                  />
+                </View>
+              </View>
+            </ScrollView>
+          )}
+        </View>
+
+        {/* Bottom Navigation Bar */}
+        <View style={styles.bottomTabBar}>
+          <Pressable
+            accessibilityRole="tab"
+            accessibilityState={{
+              selected: viewMode === 'feed' || viewMode === 'requests',
+            }}
+            onPress={() => setViewMode('feed')}
+            style={[
+              styles.bottomTabItem,
+              (viewMode === 'feed' || viewMode === 'requests') &&
+                styles.bottomTabItemActive,
+            ]}
+          >
+            <Text
+              style={[
+                styles.bottomTabIcon,
+                (viewMode === 'feed' || viewMode === 'requests') &&
+                  styles.bottomTabIconActive,
+              ]}
+            >
+              📦
+            </Text>
+            <Text
+              style={[
+                styles.bottomTabLabel,
+                (viewMode === 'feed' || viewMode === 'requests') &&
+                  styles.bottomTabLabelActive,
+              ]}
+            >
+              Listings
+            </Text>
+          </Pressable>
+
+          <Pressable
+            accessibilityRole="tab"
+            accessibilityState={{ selected: viewMode === 'create' }}
+            onPress={() => {
+              setEditing(undefined);
+              setViewMode('create');
+            }}
+            style={[
+              styles.bottomTabItem,
+              viewMode === 'create' && styles.bottomTabItemActive,
+            ]}
+          >
+            <Text
+              style={[
+                styles.bottomTabIcon,
+                viewMode === 'create' && styles.bottomTabIconActive,
+              ]}
+            >
+              ➕
+            </Text>
+            <Text
+              style={[
+                styles.bottomTabLabel,
+                viewMode === 'create' && styles.bottomTabLabelActive,
+              ]}
+            >
+              Post Food
+            </Text>
+          </Pressable>
+
+          <Pressable
+            accessibilityRole="tab"
+            accessibilityState={{
+              selected: viewMode === 'pickup' || scannerVisible,
+            }}
+            onPress={() => setScannerVisible(true)}
+            style={[
+              styles.bottomTabItem,
+              (viewMode === 'pickup' || scannerVisible) &&
+                styles.bottomTabItemActive,
+            ]}
+          >
+            <Text
+              style={[
+                styles.bottomTabIcon,
+                (viewMode === 'pickup' || scannerVisible) &&
+                  styles.bottomTabIconActive,
+              ]}
+            >
+              📷
+            </Text>
+            <Text
+              style={[
+                styles.bottomTabLabel,
+                (viewMode === 'pickup' || scannerVisible) &&
+                  styles.bottomTabLabelActive,
+              ]}
+            >
+              Handover
+            </Text>
+          </Pressable>
+
+          <Pressable
+            accessibilityRole="tab"
+            accessibilityState={{ selected: viewMode === 'profile' }}
+            onPress={() => setViewMode('profile')}
+            style={[
+              styles.bottomTabItem,
+              viewMode === 'profile' && styles.bottomTabItemActive,
+            ]}
+          >
+            <Text
+              style={[
+                styles.bottomTabIcon,
+                viewMode === 'profile' && styles.bottomTabIconActive,
+              ]}
+            >
+              🏪
+            </Text>
+            <Text
+              style={[
+                styles.bottomTabLabel,
+                viewMode === 'profile' && styles.bottomTabLabelActive,
+              ]}
+            >
+              Business
+            </Text>
+          </Pressable>
+        </View>
+
         <DonorPickupScanner
-          visible={scannerVisible && canManage}
+          visible={scannerVisible}
           onClose={() => setScannerVisible(false)}
           onSelectListing={(listing) => {
             setSelectedListing(listing);
@@ -309,48 +546,461 @@ export function DonorProfile({ user }: { user: User }) {
     );
   }
 
+  if (profile?.data && profile.data.verificationStatus === 'pending') {
+    return (
+      <View style={styles.pendingShell}>
+        <View style={styles.pendingCard}>
+          <View style={styles.pendingIconBox}>
+            <Text style={{ fontSize: 32 }}>⏳</Text>
+          </View>
+          <Text style={styles.pendingTitle}>Application Under Review</Text>
+          <Text style={styles.pendingBusinessName}>{profile.data.name}</Text>
+          <Text style={styles.pendingDesc}>
+            Your business profile has been submitted and is currently being
+            reviewed by FoodRescue administrators. You will be able to post
+            surplus food once approved.
+          </Text>
+          {!!user.email && (
+            <Text style={styles.pendingEmail}>Account: {user.email}</Text>
+          )}
+          <View style={{ marginTop: 16, width: '100%' }}>
+            <AccountButton
+              label={busy === 'signout' ? 'Signing out…' : 'Sign out'}
+              disabled={!!busy}
+              onPress={signOut}
+              secondary
+            />
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  if (profile?.data && profile.data.verificationStatus === 'rejected') {
+    return (
+      <View style={styles.pendingShell}>
+        <View style={styles.rejectedCard}>
+          <View style={styles.rejectedIconBox}>
+            <Text style={{ fontSize: 32 }}>⚠️</Text>
+          </View>
+          <Text style={styles.rejectedTitle}>Verification Not Approved</Text>
+          <Text style={styles.pendingBusinessName}>{profile.data.name}</Text>
+          <Text style={styles.rejectedReason}>
+            Rejection reason:{' '}
+            {profile.data.rejectionReason ||
+              'Contact the FoodRescue project team for guidance on your application.'}
+          </Text>
+          <View style={{ marginTop: 16, width: '100%' }}>
+            <AccountButton
+              label={busy === 'signout' ? 'Signing out…' : 'Sign out'}
+              disabled={!!busy}
+              onPress={signOut}
+              secondary
+            />
+          </View>
+        </View>
+      </View>
+    );
+  }
+
   return (
-    <View style={styles.form}>
-      {!!user.email && (
-        <Text style={styles.body}>Signed in as {user.email}</Text>
-      )}
-      {!!fromCache && !error && (
-        <Text accessibilityLiveRegion="polite" style={styles.pending}>
-          Waiting for the server. Saved information may be out of date.
-        </Text>
-      )}
-      {renderProfile()}
-      {!!message && <AccountError message={message} />}
-      <AccountButton
-        label={busy === 'signout' ? 'Signing out…' : 'Sign out'}
-        disabled={!!busy}
-        onPress={signOut}
-        secondary
-      />
-      <DonorPickupScanner
-        visible={scannerVisible && canManage}
-        onClose={() => setScannerVisible(false)}
-        onSelectListing={(listing) => {
-          setSelectedListing(listing);
-          setViewMode('pickup');
-        }}
-      />
-    </View>
+    <ScrollView contentContainerStyle={styles.formScroll}>
+      <View style={styles.formContainer}>
+        {!!user.email && (
+          <Text style={styles.body}>Signed in as {user.email}</Text>
+        )}
+        {!!fromCache && !error && (
+          <Text accessibilityLiveRegion="polite" style={styles.pending}>
+            Waiting for the server. Saved information may be out of date.
+          </Text>
+        )}
+        {renderProfile()}
+        {!!message && <AccountError message={message} />}
+        <AccountButton
+          label={busy === 'signout' ? 'Signing out…' : 'Sign out'}
+          disabled={!!busy}
+          onPress={signOut}
+          secondary
+        />
+      </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
+  appShell: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+  },
+  appHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  appHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  appHeaderLogoBadge: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: '#DCFCE7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  appHeaderBrand: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  appHeaderSub: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '500',
+    maxWidth: 140,
+  },
+  appHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  verifiedPartnerBadge: {
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+  },
+  verifiedPartnerText: {
+    color: '#15803D',
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  headerSignOutBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+  },
+  headerSignOutText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  appBody: {
+    flex: 1,
+  },
+  noticeBanner: {
+    backgroundColor: '#DCFCE7',
+    color: '#15803D',
+    padding: 10,
+    textAlign: 'center',
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  profileTabContent: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  businessProfileCard: {
+    width: '100%',
+    maxWidth: 440,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    alignItems: 'center',
+    gap: 12,
+  },
+  businessIconBox: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    backgroundColor: '#E1F3E8',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  businessProfileName: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#0F172A',
+    textAlign: 'center',
+  },
+  verifiedTagRow: {
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+  },
+  verifiedTagText: {
+    color: '#15803D',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  businessProfileDesc: {
+    fontSize: 13,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  businessInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: '#F1F5F9',
+    marginTop: 8,
+  },
+  businessInfoLabel: {
+    fontSize: 13,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  businessInfoValue: {
+    fontSize: 13,
+    color: '#0F172A',
+    fontWeight: '600',
+  },
+  bottomTabBar: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 8,
+  },
+  bottomTabItem: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 6,
+    borderRadius: 8,
+    gap: 3,
+  },
+  bottomTabItemActive: {
+    backgroundColor: '#F0FDF4',
+  },
+  bottomTabIcon: {
+    fontSize: 18,
+    opacity: 0.6,
+  },
+  bottomTabIconActive: {
+    opacity: 1,
+  },
+  bottomTabLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  bottomTabLabelActive: {
+    color: '#167044',
+    fontWeight: '700',
+  },
+  pendingShell: {
+    flex: 1,
+    padding: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+  },
+  pendingCard: {
+    width: '100%',
+    maxWidth: 440,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: '#FEF08A',
+    alignItems: 'center',
+    gap: 12,
+    shadowColor: '#CA8A04',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  pendingIconBox: {
+    width: 60,
+    height: 60,
+    borderRadius: 18,
+    backgroundColor: '#FEF9C3',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pendingTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#854D0E',
+  },
+  pendingBusinessName: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#0F172A',
+    textAlign: 'center',
+  },
+  pendingDesc: {
+    fontSize: 14,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  pendingEmail: {
+    fontSize: 12,
+    color: '#94A3B8',
+  },
+  rejectedCard: {
+    width: '100%',
+    maxWidth: 440,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    alignItems: 'center',
+    gap: 12,
+  },
+  rejectedIconBox: {
+    width: 60,
+    height: 60,
+    borderRadius: 18,
+    backgroundColor: '#FEE2E2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rejectedTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#B91C1C',
+  },
+  rejectedReason: {
+    fontSize: 14,
+    color: '#7F1D1D',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  formScroll: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  formContainer: {
+    width: '100%',
+    maxWidth: 440,
+    gap: 14,
+  },
   form: { gap: 14 },
   loading: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  title: { color: donorColors.green, fontSize: 22, fontWeight: '700' },
-  body: { color: donorColors.secondary, fontSize: 15, lineHeight: 22 },
-  business: { color: donorColors.text, fontSize: 16, fontWeight: '600' },
+  title: { color: '#0F172A', fontSize: 20, fontWeight: '700' },
+  body: { color: donorColors.secondary, fontSize: 14, lineHeight: 21 },
+  business: { color: '#0F172A', fontSize: 18, fontWeight: '800' },
   pending: { color: donorColors.amber },
   rejected: { color: donorColors.danger },
   statusPanel: {
-    backgroundColor: donorColors.background,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     borderRadius: 14,
-    padding: 16,
+    padding: 18,
     gap: 8,
+  },
+  verifiedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    marginBottom: 4,
+  },
+  verifiedText: {
+    color: '#15803D',
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.2,
+  },
+  heroActionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#167044',
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#167044',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  heroActionIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroActionTitle: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  heroActionDesc: {
+    color: 'rgba(255, 255, 255, 0.85)',
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  actionGrid: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  tileActionCard: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tileTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+    textAlign: 'center',
+  },
+  tileDesc: {
+    fontSize: 11,
+    color: '#64748B',
+    textAlign: 'center',
+    marginTop: 2,
+    lineHeight: 15,
+  },
+  cardPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.98 }],
   },
 });

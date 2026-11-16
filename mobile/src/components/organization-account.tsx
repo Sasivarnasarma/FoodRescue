@@ -28,17 +28,17 @@ import { RecipientFeed } from './recipient-feed';
 import { submitProfile } from '@/lib/verification';
 
 const palette = {
-  page: '#F4F8F5',
+  page: '#F8FAFC',
   surface: '#FFFFFF',
-  text: '#152A20',
-  muted: '#4B6255',
+  text: '#0F172A',
+  muted: '#64748B',
   action: '#167044',
-  border: '#C8DAD0',
-  green: '#E5F4EB',
-  amber: '#FFF4D4',
-  amberText: '#704716',
-  red: '#FCEBEC',
-  redText: '#952D33',
+  border: '#E2E8F0',
+  green: '#E1F3E8',
+  amber: '#FFFBEB',
+  amberText: '#B45309',
+  red: '#FEF2F2',
+  redText: '#B91C1C',
 };
 
 const statusContent = {
@@ -224,12 +224,28 @@ function ProfileForm() {
   );
 }
 
-export function ProfileStatus({ uid }: { uid: string }) {
+export function ProfileStatus({ uid, user }: { uid: string; user?: User }) {
   const [account, setAccount] = useState<AccountSnapshot>();
   const [profile, setProfile] = useState<ProfileSnapshot>();
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
-  const [showFeed, setShowFeed] = useState(false);
+  const [recipientTab, setRecipientTab] = useState<
+    'feed' | 'requests' | 'profile'
+  >('feed');
+  const [signingOut, setSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState('');
+
+  const handleSignOut = async () => {
+    if (signingOut) return;
+    setSigningOut(true);
+    try {
+      await signOutAccount();
+    } catch {
+      setSignOutError('Could not sign out. Try again.');
+    } finally {
+      setSigningOut(false);
+    }
+  };
 
   useEffect(() => {
     const { db } = getFirebaseClients();
@@ -267,8 +283,20 @@ export function ProfileStatus({ uid }: { uid: string }) {
     };
   }, [attempt, uid]);
 
-  if (error) {
+  function statusPanel(content: ReactNode) {
     return (
+      <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }}>
+        {content}
+        {signOutError ? <Message tone="error">{signOutError}</Message> : null}
+        <Action onPress={handleSignOut} disabled={signingOut} secondary>
+          {signingOut ? 'Signing out…' : 'Sign out'}
+        </Action>
+      </ScrollView>
+    );
+  }
+
+  if (error) {
+    return statusPanel(
       <View style={styles.card}>
         <Message tone="error">{error}</Message>
         <Action
@@ -282,54 +310,268 @@ export function ProfileStatus({ uid }: { uid: string }) {
         >
           Try again
         </Action>
-      </View>
+      </View>,
     );
   }
-  if (!account || !profile) return <Loading label="Checking profile…" />;
+  if (!account || !profile)
+    return statusPanel(<Loading label="Checking profile…" />);
 
   const result = getOrganizationVerification(account, profile);
-  if (result.state === 'form') return <ProfileForm />;
+  if (result.state === 'form') return statusPanel(<ProfileForm />);
   if (result.state === 'waiting') {
-    return (
+    return statusPanel(
       <Message tone="warning">
         Waiting for the server to confirm your profile. Check your connection if
         this continues.
-      </Message>
+      </Message>,
     );
   }
   if (result.state === 'other-role') {
-    return (
+    return statusPanel(
       <Message tone="warning">
         This account belongs to a donor. Return home or sign in with an
         organization account.
-      </Message>
+      </Message>,
     );
   }
   if (result.state === 'suspended') {
-    return (
+    return statusPanel(
       <Message tone="error">
         This account is suspended. Contact the FoodRescue project team.
-      </Message>
+      </Message>,
     );
   }
   if (result.state === 'invalid') {
-    return (
+    return statusPanel(
       <Message tone="error">
         We could not read an active organization profile for this account.
         Contact the FoodRescue project team.
-      </Message>
+      </Message>,
     );
   }
 
-  if (showFeed && result.state === 'approved' && result.confirmed)
+  if (result.state === 'approved' && result.confirmed) {
     return (
-      <View style={{ gap: 12 }}>
-        <Action secondary onPress={() => setShowFeed(false)}>
-          Back to profile
-        </Action>
-        <RecipientFeed />
+      <View style={styles.appShell}>
+        {/* Modern Top App Bar */}
+        <View style={styles.appHeader}>
+          <View style={styles.appHeaderLeft}>
+            <View style={styles.appHeaderLogoBadge}>
+              <Text style={{ fontSize: 18 }}>🌱</Text>
+            </View>
+            <View>
+              <Text style={styles.appHeaderBrand}>FoodRescue</Text>
+              <Text style={styles.appHeaderSub} numberOfLines={1}>
+                {result.name}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.appHeaderRight}>
+            <View style={styles.verifiedPartnerBadge}>
+              <Text style={styles.verifiedPartnerText}>
+                ✓ Verified Non-Profit
+              </Text>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              onPress={handleSignOut}
+              disabled={signingOut}
+              style={styles.headerSignOutBtn}
+            >
+              <Text style={styles.headerSignOutText}>
+                {signingOut ? '…' : 'Sign out'}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+
+        {/* Content Body */}
+        <View style={styles.appBody}>
+          {recipientTab === 'feed' && (
+            <RecipientFeed initialTab="feed" key="feed" />
+          )}
+          {recipientTab === 'requests' && (
+            <RecipientFeed initialTab="requests" key="requests" />
+          )}
+          {recipientTab === 'profile' && (
+            <ScrollView contentContainerStyle={styles.profileTabContent}>
+              <View style={styles.orgProfileCard}>
+                <View style={styles.orgProfileIconBox}>
+                  <Text style={{ fontSize: 32 }}>🤝</Text>
+                </View>
+                <Text style={styles.orgProfileName}>{result.name}</Text>
+                <View style={styles.verifiedTagRow}>
+                  <Text style={styles.verifiedTagText}>
+                    ✓ Verified Non-Profit Organization
+                  </Text>
+                </View>
+                <Text style={styles.orgProfileDesc}>
+                  Your organization is verified to claim surplus food donations
+                  for community food assistance.
+                </Text>
+                {!!user?.email && (
+                  <View style={styles.orgInfoRow}>
+                    <Text style={styles.orgInfoLabel}>Signed in account:</Text>
+                    <Text style={styles.orgInfoValue}>{user.email}</Text>
+                  </View>
+                )}
+                {signOutError ? (
+                  <Message tone="error">{signOutError}</Message>
+                ) : null}
+                <View style={{ marginTop: 12, width: '100%' }}>
+                  <Action
+                    onPress={handleSignOut}
+                    disabled={signingOut}
+                    secondary
+                  >
+                    {signingOut ? 'Signing out…' : 'Sign out'}
+                  </Action>
+                </View>
+              </View>
+            </ScrollView>
+          )}
+        </View>
+
+        {/* Modern Bottom Navigation Bar */}
+        <View style={styles.bottomTabBar}>
+          <Pressable
+            accessibilityRole="tab"
+            accessibilityState={{ selected: recipientTab === 'feed' }}
+            onPress={() => setRecipientTab('feed')}
+            style={[
+              styles.bottomTabItem,
+              recipientTab === 'feed' && styles.bottomTabItemActive,
+            ]}
+          >
+            <Text
+              style={[
+                styles.bottomTabIcon,
+                recipientTab === 'feed' && styles.bottomTabIconActive,
+              ]}
+            >
+              🍲
+            </Text>
+            <Text
+              style={[
+                styles.bottomTabLabel,
+                recipientTab === 'feed' && styles.bottomTabLabelActive,
+              ]}
+            >
+              Browse Food
+            </Text>
+          </Pressable>
+
+          <Pressable
+            accessibilityRole="tab"
+            accessibilityState={{ selected: recipientTab === 'requests' }}
+            onPress={() => setRecipientTab('requests')}
+            style={[
+              styles.bottomTabItem,
+              recipientTab === 'requests' && styles.bottomTabItemActive,
+            ]}
+          >
+            <Text
+              style={[
+                styles.bottomTabIcon,
+                recipientTab === 'requests' && styles.bottomTabIconActive,
+              ]}
+            >
+              📋
+            </Text>
+            <Text
+              style={[
+                styles.bottomTabLabel,
+                recipientTab === 'requests' && styles.bottomTabLabelActive,
+              ]}
+            >
+              My Pickups
+            </Text>
+          </Pressable>
+
+          <Pressable
+            accessibilityRole="tab"
+            accessibilityState={{ selected: recipientTab === 'profile' }}
+            onPress={() => setRecipientTab('profile')}
+            style={[
+              styles.bottomTabItem,
+              recipientTab === 'profile' && styles.bottomTabItemActive,
+            ]}
+          >
+            <Text
+              style={[
+                styles.bottomTabIcon,
+                recipientTab === 'profile' && styles.bottomTabIconActive,
+              ]}
+            >
+              🏢
+            </Text>
+            <Text
+              style={[
+                styles.bottomTabLabel,
+                recipientTab === 'profile' && styles.bottomTabLabelActive,
+              ]}
+            >
+              Organization
+            </Text>
+          </Pressable>
+        </View>
       </View>
     );
+  }
+
+  if (result.state === 'pending') {
+    return (
+      <View style={styles.pendingShell}>
+        <View style={styles.pendingCard}>
+          <View style={styles.pendingIconBox}>
+            <Text style={{ fontSize: 32 }}>⏳</Text>
+          </View>
+          <Text style={styles.pendingTitle}>Application Under Review</Text>
+          <Text style={styles.pendingOrgName}>{result.name}</Text>
+          <Text style={styles.pendingDesc}>
+            An administrator is reviewing your organization profile. You will be
+            able to browse and claim surplus food as soon as verification is
+            confirmed.
+          </Text>
+          {!!user?.email && (
+            <Text style={styles.pendingEmail}>Account: {user.email}</Text>
+          )}
+          <View style={{ marginTop: 16, width: '100%' }}>
+            <Action onPress={handleSignOut} disabled={signingOut} secondary>
+              {signingOut ? 'Signing out…' : 'Sign out'}
+            </Action>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  if (result.state === 'rejected') {
+    return (
+      <View style={styles.pendingShell}>
+        <View style={styles.rejectedCard}>
+          <View style={styles.rejectedIconBox}>
+            <Text style={{ fontSize: 32 }}>⚠️</Text>
+          </View>
+          <Text style={styles.rejectedTitle}>Organization Not Approved</Text>
+          <Text style={styles.pendingOrgName}>{result.name}</Text>
+          <Text style={styles.rejectedReason}>
+            Rejection reason:{' '}
+            {typeof profile.data?.rejectionReason === 'string' &&
+            profile.data.rejectionReason
+              ? profile.data.rejectionReason
+              : 'Contact the FoodRescue project team for guidance on your application.'}
+          </Text>
+          <View style={{ marginTop: 16, width: '100%' }}>
+            <Action onPress={handleSignOut} disabled={signingOut} secondary>
+              {signingOut ? 'Signing out…' : 'Sign out'}
+            </Action>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
   const status = statusContent[result.state];
   return (
     <View style={styles.card}>
@@ -338,18 +580,6 @@ export function ProfileStatus({ uid }: { uid: string }) {
         {status.title}
       </Text>
       <Message tone={status.tone}>{status.message}</Message>
-      {result.state === 'approved' && result.confirmed && (
-        <Action onPress={() => setShowFeed(true)}>Browse donations</Action>
-      )}
-      {result.state === 'rejected' && (
-        <Text style={styles.body}>
-          Rejection reason:{' '}
-          {typeof profile.data?.rejectionReason === 'string' &&
-          profile.data.rejectionReason
-            ? profile.data.rejectionReason
-            : 'No reason was recorded for this earlier decision.'}
-        </Text>
-      )}
       {!result.confirmed ? (
         <Message tone="warning">
           Showing a saved status while we reconnect. It may have changed.
@@ -360,32 +590,7 @@ export function ProfileStatus({ uid }: { uid: string }) {
 }
 
 function SignedIn({ user }: { user: User }) {
-  const [signingOut, setSigningOut] = useState(false);
-  const [error, setError] = useState('');
-
-  async function signOut() {
-    if (signingOut) return;
-    setSigningOut(true);
-    setError('');
-    try {
-      await signOutAccount();
-    } catch (failure) {
-      setError(readableError(failure, 'Could not sign out. Try again.'));
-    } finally {
-      setSigningOut(false);
-    }
-  }
-
-  return (
-    <>
-      {user.email ? <Text style={styles.body}>{user.email}</Text> : null}
-      <ProfileStatus uid={user.uid} />
-      {error ? <Message tone="error">{error}</Message> : null}
-      <Action onPress={signOut} disabled={signingOut} secondary>
-        {signingOut ? 'Signing out…' : 'Sign out'}
-      </Action>
-    </>
-  );
+  return <ProfileStatus uid={user.uid} user={user} />;
 }
 
 function Loading({ label }: { label: string }) {
@@ -451,7 +656,12 @@ export default function OrganizationScreen() {
   } else if (user === undefined) {
     content = <Loading label="Restoring your session…" />;
   } else if (user) {
-    content = <SignedIn user={user} key={user.uid} />;
+    return (
+      <SafeAreaView edges={['top', 'left', 'right']} style={styles.appShell}>
+        <StatusBar style="dark" />
+        <SignedIn user={user} key={user.uid} />
+      </SafeAreaView>
+    );
   } else {
     content = <Redirect href="/" />;
   }
@@ -489,6 +699,267 @@ export default function OrganizationScreen() {
 }
 
 const styles = StyleSheet.create({
+  appShell: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+  },
+  appHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  appHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  appHeaderLogoBadge: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: '#DCFCE7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  appHeaderBrand: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  appHeaderSub: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '500',
+    maxWidth: 140,
+  },
+  appHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  verifiedPartnerBadge: {
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+  },
+  verifiedPartnerText: {
+    color: '#15803D',
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  headerSignOutBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+  },
+  headerSignOutText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  appBody: {
+    flex: 1,
+  },
+  profileTabContent: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  orgProfileCard: {
+    width: '100%',
+    maxWidth: 440,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    alignItems: 'center',
+    gap: 12,
+  },
+  orgProfileIconBox: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    backgroundColor: '#E1F3E8',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  orgProfileName: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#0F172A',
+    textAlign: 'center',
+  },
+  verifiedTagRow: {
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+  },
+  verifiedTagText: {
+    color: '#15803D',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  orgProfileDesc: {
+    fontSize: 13,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  orgInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: '#F1F5F9',
+    marginTop: 8,
+  },
+  orgInfoLabel: {
+    fontSize: 13,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  orgInfoValue: {
+    fontSize: 13,
+    color: '#0F172A',
+    fontWeight: '600',
+  },
+  bottomTabBar: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 8,
+  },
+  bottomTabItem: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 6,
+    borderRadius: 8,
+    gap: 3,
+  },
+  bottomTabItemActive: {
+    backgroundColor: '#F0FDF4',
+  },
+  bottomTabIcon: {
+    fontSize: 18,
+    opacity: 0.6,
+  },
+  bottomTabIconActive: {
+    opacity: 1,
+  },
+  bottomTabLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  bottomTabLabelActive: {
+    color: '#167044',
+    fontWeight: '700',
+  },
+  pendingShell: {
+    flex: 1,
+    padding: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+  },
+  pendingCard: {
+    width: '100%',
+    maxWidth: 440,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: '#FEF08A',
+    alignItems: 'center',
+    gap: 12,
+    shadowColor: '#CA8A04',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  pendingIconBox: {
+    width: 60,
+    height: 60,
+    borderRadius: 18,
+    backgroundColor: '#FEF9C3',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pendingTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#854D0E',
+  },
+  pendingOrgName: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#0F172A',
+    textAlign: 'center',
+  },
+  pendingDesc: {
+    fontSize: 14,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  pendingEmail: {
+    fontSize: 12,
+    color: '#94A3B8',
+  },
+  rejectedCard: {
+    width: '100%',
+    maxWidth: 440,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    alignItems: 'center',
+    gap: 12,
+  },
+  rejectedIconBox: {
+    width: 60,
+    height: 60,
+    borderRadius: 18,
+    backgroundColor: '#FEE2E2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rejectedTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#B91C1C',
+  },
+  rejectedReason: {
+    fontSize: 14,
+    color: '#7F1D1D',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
   page: { flex: 1, backgroundColor: palette.page },
   scrollContent: {
     alignItems: 'center',
@@ -517,49 +988,67 @@ const styles = StyleSheet.create({
   body: { color: palette.muted, fontSize: 15, lineHeight: 22 },
   card: {
     gap: 16,
-    backgroundColor: palette.surface,
-    borderColor: palette.border,
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E2E8F0',
     borderWidth: 1,
-    borderRadius: 22,
-    padding: 20,
+    borderRadius: 16,
+    padding: 22,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   field: { gap: 6 },
-  label: { color: palette.text, fontWeight: '600', fontSize: 14 },
+  label: { color: '#334155', fontWeight: '600', fontSize: 13 },
   input: {
-    color: palette.text,
-    backgroundColor: palette.page,
-    borderColor: palette.border,
+    color: '#0F172A',
+    backgroundColor: '#F8FAFC',
+    borderColor: '#CBD5E1',
     borderWidth: 1,
-    borderRadius: 12,
-    padding: 12,
+    borderRadius: 10,
+    paddingHorizontal: 14,
     minHeight: 48,
-    fontSize: 16,
+    fontSize: 15,
   },
   action: {
     minHeight: 48,
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     paddingVertical: 12,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 12,
-    backgroundColor: palette.action,
+    backgroundColor: '#167044',
+    shadowColor: '#167044',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  secondaryAction: { backgroundColor: palette.green },
-  dimmed: { opacity: 0.6 },
+  secondaryAction: {
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  dimmed: { opacity: 0.65 },
   actionText: {
-    color: palette.surface,
+    color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '700',
     textAlign: 'center',
   },
-  secondaryText: { color: palette.action },
+  secondaryText: { color: '#334155' },
   notice: {
-    color: palette.text,
-    backgroundColor: palette.surface,
-    borderRadius: 12,
+    color: '#0F172A',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
     padding: 12,
-    fontSize: 15,
-    lineHeight: 22,
+    fontSize: 14,
+    lineHeight: 20,
   },
   warning: { backgroundColor: palette.amber, color: palette.amberText },
   error: { backgroundColor: palette.red, color: palette.redText },
