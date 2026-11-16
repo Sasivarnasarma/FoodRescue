@@ -8,6 +8,7 @@ import {
   View,
 } from 'react-native';
 import { AccountButton, AccountField, AccountError } from './donor-controls';
+import { DateTimePickerField } from './date-time-picker-field';
 import { LocationPickerCard } from './location-picker-card';
 import { PhotoAttachmentCard } from './photo-attachment-card';
 import type { CompressedPhotoResult } from '../lib/image-service';
@@ -311,38 +312,54 @@ export function DonorListingForm({
           }}
           disabled={busy}
         />
-        <View style={styles.helperNoteBox}>
-          <Text style={styles.helperNoteText}>
-            ℹ️ Enter times in your device time zone as YYYY-MM-DD HH:mm
-          </Text>
-        </View>
-        <AccountField
-          label="Pickup starts"
+        <DateTimePickerField
+          label="Pickup starts *"
           value={starts}
           onChangeText={setStarts}
-          placeholder="YYYY-MM-DD HH:mm"
           editable={!busy}
+          minDate={new Date()}
+          presets={[
+            { label: '+30m', offsetMinutes: 30 },
+            { label: '+1 Hour', offsetMinutes: 60 },
+            { label: '+2 Hours', offsetMinutes: 120 },
+          ]}
         />
-        <AccountField
-          label="Pickup deadline"
+        <DateTimePickerField
+          label="Pickup deadline *"
           value={deadline}
           onChangeText={setDeadline}
-          placeholder="YYYY-MM-DD HH:mm"
           editable={!busy}
+          minDate={new Date()}
+          presets={[
+            { label: '+2 Hours', offsetMinutes: 120 },
+            { label: '+4 Hours', offsetMinutes: 240 },
+            { label: '+8 Hours', offsetMinutes: 480 },
+            { label: 'Tomorrow +24h', offsetMinutes: 1440 },
+          ]}
         />
-        <AccountField
+        <DateTimePickerField
           label="Best-before (optional)"
           value={bestBefore}
           onChangeText={setBestBefore}
-          placeholder="YYYY-MM-DD HH:mm"
           editable={!busy}
+          optional
+          presets={[
+            { label: '+1 Day', offsetMinutes: 1440 },
+            { label: '+3 Days', offsetMinutes: 4320 },
+            { label: '+1 Week', offsetMinutes: 10080 },
+          ]}
         />
-        <AccountField
+        <DateTimePickerField
           label="Use-by (optional)"
           value={useBy}
           onChangeText={setUseBy}
-          placeholder="YYYY-MM-DD HH:mm"
           editable={!busy}
+          optional
+          presets={[
+            { label: '+1 Day', offsetMinutes: 1440 },
+            { label: '+2 Days', offsetMinutes: 2880 },
+            { label: '+5 Days', offsetMinutes: 7200 },
+          ]}
         />
       </View>
 
@@ -352,6 +369,7 @@ export function DonorListingForm({
           <ActivityIndicator accessibilityLabel="Loading photo" />
         ) : (
           <PhotoAttachmentCard
+            embedded
             photo={photo}
             onPhotoSelected={(value) => {
               setPhoto(value);
@@ -390,8 +408,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   container: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 48,
+    maxWidth: 600,
+    width: '100%',
+    alignSelf: 'center',
     gap: 16,
-    paddingBottom: 24,
   },
   header: {
     marginBottom: 4,
@@ -411,8 +434,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderRadius: 16,
     padding: 18,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
     shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
@@ -489,8 +512,9 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   actionGroup: {
-    gap: 10,
-    marginTop: 4,
-    marginBottom: 20,
+    gap: 12,
+    marginTop: 8,
+    marginBottom: 40,
+    width: '100%',
   },
 });

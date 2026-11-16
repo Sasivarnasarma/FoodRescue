@@ -1,5 +1,5 @@
 import * as Location from 'expo-location';
-import { Linking, Platform } from 'react-native';
+import { Alert, Linking, Platform } from 'react-native';
 
 export interface LocationCoordinates {
   latitude: number;
@@ -13,25 +13,86 @@ export interface CurrentLocationResult {
 }
 
 /**
+ * Shows an alert popup notifying the user that location is disabled or permission denied,
+ * with an action button to open device settings.
+ */
+export function promptLocationNotEnabledAlert(customMessage?: string): void {
+  const title = 'Location Not Enabled';
+  const message =
+    customMessage ||
+    'Device location is not enabled or permission was not granted. Please enable location services in your device settings to use your current location.';
+
+  Alert.alert(title, message, [
+    { text: 'Cancel', style: 'cancel' },
+    {
+      text: 'Enable in Settings',
+      onPress: () => {
+        void Linking.openSettings().catch(() => {});
+      },
+    },
+  ]);
+}
+
+/**
+ * Checks if location services are enabled on the device.
+ * On Android, if disabled, attempts to prompt user via system dialog first.
+ */
+export async function ensureLocationServicesEnabled(): Promise<boolean> {
+  try {
+    const enabled = await Location.hasServicesEnabledAsync();
+    if (enabled) return true;
+
+    if (Platform.OS === 'android') {
+      try {
+        await Location.enableNetworkProviderAsync();
+        const nowEnabled = await Location.hasServicesEnabledAsync();
+        if (nowEnabled) return true;
+      } catch {
+        // User dismissed Android system dialog or unsupported
+      }
+    }
+  } catch {
+    // Non-blocking fallback
+  }
+
+  promptLocationNotEnabledAlert(
+    'Location services are turned off on your device. Please turn on location to use your current location.',
+  );
+  return false;
+}
+
+/**
  * Requests location permission and fetches the device's current GPS position.
  */
 export async function getCurrentDeviceLocation(): Promise<LocationCoordinates> {
+  const servicesOk = await ensureLocationServicesEnabled();
+  if (!servicesOk) {
+    throw new Error(
+      'Location services are disabled. Turn on device location in Settings or enter coordinates manually.',
+    );
+  }
+
   let permission = await Location.getForegroundPermissionsAsync();
-  if (!permission.granted && !permission.canAskAgain)
+  if (!permission.granted && !permission.canAskAgain) {
+    promptLocationNotEnabledAlert(
+      'Location access is blocked. Open device Settings to grant location access.',
+    );
     throw new Error(
       'Location access is blocked. Open device Settings or enter coordinates manually.',
     );
-  if (!permission.granted)
+  }
+  if (!permission.granted) {
     permission = await Location.requestForegroundPermissionsAsync();
+  }
   const { status } = permission;
   if (status !== 'granted') {
+    promptLocationNotEnabledAlert(
+      'Location permission was denied. You can enable location in Settings or enter an address manually.',
+    );
     throw new Error(
       'Location permission was denied. You can enter an address manually.',
     );
   }
-
-  if (!(await Location.hasServicesEnabledAsync()))
-    throw new Error('Turn on device location or enter coordinates manually.');
   let timeout: ReturnType<typeof setTimeout> | undefined;
   let location: Location.LocationObject;
   try {

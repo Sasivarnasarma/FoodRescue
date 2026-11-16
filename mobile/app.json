@@ -48,7 +48,8 @@
           "photosPermission": "Choose an optional donation photo.",
           "cameraPermission": "Take an optional donation photo."
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true,
