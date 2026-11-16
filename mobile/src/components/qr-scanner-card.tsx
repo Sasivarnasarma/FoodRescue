@@ -1,6 +1,7 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  AppState,
   Linking,
   Platform,
   StyleSheet,
@@ -33,6 +34,15 @@ export function QrScannerCard({
   const [error, setError] = useState('');
   const [scannedId, setScannedId] = useState<string | null>(null);
   const scanLock = useRef(false);
+  const [foreground, setForeground] = useState(
+    AppState.currentState === 'active',
+  );
+  useEffect(() => {
+    const listener = AppState.addEventListener('change', (state) =>
+      setForeground(state === 'active'),
+    );
+    return () => listener.remove();
+  }, []);
 
   const handleBarcodeScanned = (scannedData: string) => {
     if (scanLock.current || disabled) return;
@@ -58,11 +68,13 @@ export function QrScannerCard({
       return;
     }
 
+    scanLock.current = true;
     setScannedId(result.listingId);
     onScanSuccess(result.listingId);
   };
 
   const handleManualSubmit = () => {
+    if (scanLock.current || disabled) return;
     setError('');
     const trimmed = manualInput.trim();
     if (!trimmed) {
@@ -83,6 +95,7 @@ export function QrScannerCard({
       return;
     }
 
+    scanLock.current = true;
     setScannedId(result.listingId);
     onScanSuccess(result.listingId);
   };
@@ -166,7 +179,7 @@ export function QrScannerCard({
       </View>
 
       {/* Camera Scanner View */}
-      {activeTab === 'camera' ? (
+      {activeTab === 'camera' && !disabled && !scannedId && foreground ? (
         <View style={styles.cameraWrapper}>
           {!permission ? (
             <View style={styles.permissionPlaceholder}>
@@ -187,7 +200,13 @@ export function QrScannerCard({
                 <TouchableOpacity
                   accessibilityRole="button"
                   style={styles.actionButton}
-                  onPress={() => void requestPermission()}
+                  onPress={() => {
+                    void requestPermission().catch(() =>
+                      setError(
+                        'Could not request camera access. Enter the reference manually.',
+                      ),
+                    );
+                  }}
                 >
                   <Text style={styles.actionButtonText}>
                     Grant Camera Access
@@ -223,6 +242,9 @@ export function QrScannerCard({
                 barcodeScannerSettings={{
                   barcodeTypes: ['qr'],
                 }}
+                onMountError={() =>
+                  setError('Camera unavailable. Enter the reference manually.')
+                }
                 onBarcodeScanned={({ data }) => handleBarcodeScanned(data)}
               />
               {/* Viewfinder Target Reticle Overlay */}
@@ -294,7 +316,7 @@ export function QrScannerCard({
       {error ? (
         <View style={styles.errorBanner}>
           <Text style={styles.errorText}>{error}</Text>
-          {activeTab === 'camera' ? (
+          {activeTab === 'camera' && !disabled && !scannedId && foreground ? (
             <TouchableOpacity
               accessibilityRole="button"
               onPress={handleResetScan}

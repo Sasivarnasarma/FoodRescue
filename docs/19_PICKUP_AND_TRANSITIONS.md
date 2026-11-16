@@ -51,7 +51,7 @@ Member 5 implements the shared QR display, camera scanning, manual reference fal
   - `isPickupReminderSet(listingId)` & `setPickupReminder(listingId, enabled)`: manages persistent in-app local pickup reminder preferences in `AsyncStorage`.
 - `mobile/src/components/qr-display-card.tsx`:
   - Recipient pickup display card rendering a crisp vector-grid QR code without native SVG dependencies.
-  - Displays human-readable monospace Reference ID with tap-to-copy action.
+  - Displays a selectable monospace Reference ID for native long-press copying.
   - Shows real-time window timing/countdown badge and handover confirmation guidance.
   - In-app pickup reminder toggle button.
   - Embedded into `mobile/src/components/request-status-card.tsx` for approved requests.
@@ -81,3 +81,4 @@ pnpm --dir firebase exec firebase deploy --only firestore:rules --project foodre
 ```
 
 No deployment was performed during this review. After the other pickup screens are integrated, rehearse on two physical Android devices: confirm then collect, clear and reconfirm, let confirmation expire, cancel with and without enough remaining time, close as donor, and reconcile an overdue assignment. Verify both devices show the same committed state and denied/duplicate actions show errors. Physical testing is pending; automated checks do not verify QR camera behavior.
+QR review: the standard payload is `foodrescue:v1:<listingId>`. Unsupported versions and arbitrary URLs are rejected. Render at least four white modules around the QR for scanning. Reference text is selectable for native copy. Optional reminders are foreground alerts while the pickup card is open; no background notification is scheduled. A failed preference save is shown as an error. Scanner events and manual lookup share one submission lock, and the camera is paused after a scan or when inactive.

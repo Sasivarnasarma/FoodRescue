@@ -1,12 +1,15 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
+  AppState,
   Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useCurrentTime } from '../hooks/use-current-time';
 import {
   encodePickupQrPayload,
   generateQrMatrix,
@@ -25,6 +28,7 @@ export interface QrDisplayCardProps {
   pickupStartsAt?: Date | null;
   pickupDeadline?: Date | null;
   recipientConfirmed?: boolean;
+  recipientConfirmedAt?: Date | null;
   size?: number;
 }
 
@@ -34,19 +38,15 @@ export function QrDisplayCard({
   pickupStartsAt,
   pickupDeadline,
   recipientConfirmed = false,
+  recipientConfirmedAt,
   size = 220,
 }: QrDisplayCardProps) {
-  const [copied, setCopied] = useState(false);
   const [reminderActive, setReminderActive] = useState(false);
   const [reminderBusy, setReminderBusy] = useState(false);
-  const [now, setNow] = useState(() => Date.now());
-
-  // Refresh clock every 10 seconds for timely window guidance
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 10_000);
-    return () => clearInterval(timer);
-  }, []);
-
+  const now = useCurrentTime().getTime();
+  const shownReminder = useRef(new Set<string>());
+  const reminderLock = useRef(false);
+  const [reminderError, setReminderError] = useState('');
   // Check stored reminder state
   useEffect(() => {
     let active = true;
@@ -74,23 +74,59 @@ export function QrDisplayCard({
     }
   }, [listingId]);
 
-  const handleCopyReference = () => {
-    setCopied(true);
-    setTimeout(() => setCopied(false), 3000);
-  };
-
   const handleToggleReminder = async () => {
+    if (reminderLock.current) return;
+    reminderLock.current = true;
+    setReminderError('');
     setReminderBusy(true);
     try {
       const next = !reminderActive;
-      await setPickupReminder(listingId, next);
+      if (!(await setPickupReminder(listingId, next))) {
+        setReminderError('Could not save the reminder preference. Try again.');
+        return;
+      }
       setReminderActive(next);
     } finally {
+      reminderLock.current = false;
       setReminderBusy(false);
     }
   };
 
-  const cellSize = qrMatrix ? Math.floor(size / qrMatrix.size) : 8;
+  useEffect(() => {
+    if (
+      !reminderActive ||
+      AppState.currentState !== 'active' ||
+      countdown.phase === 'upcoming'
+    )
+      return;
+    const key = `${listingId}:${countdown.phase}`;
+    if (shownReminder.current.has(key)) return;
+    shownReminder.current.add(key);
+    Alert.alert(
+      'Pickup reminder',
+      `${listingTitle || 'Your donation'}: ${countdown.formatted}`,
+    );
+  }, [
+    reminderActive,
+    countdown.phase,
+    countdown.formatted,
+    listingId,
+    listingTitle,
+    now,
+  ]);
+  const confirmedMillis = recipientConfirmedAt?.getTime();
+  const confirmationRecorded =
+    recipientConfirmed || Number.isFinite(confirmedMillis);
+  const confirmationFresh =
+    confirmedMillis !== undefined &&
+    Number.isFinite(confirmedMillis) &&
+    confirmedMillis <= now &&
+    now <= confirmedMillis + 300_000 &&
+    countdown.isInsideWindow;
+  const cellSize = qrMatrix
+    ? Math.max(1, Math.floor(size / (qrMatrix.size + 8)))
+    : 8;
+  const quietZone = 4 * cellSize;
   const actualGridSize = qrMatrix ? cellSize * qrMatrix.size : size;
 
   return (
@@ -129,19 +165,21 @@ export function QrDisplayCard({
       <View
         style={[
           styles.confirmationBox,
-          recipientConfirmed
+          confirmationFresh
             ? styles.confirmationConfirmed
             : styles.confirmationPending,
         ]}
       >
         <Text style={styles.confirmationTitle}>
-          {recipientConfirmed
+          {confirmationFresh
             ? '✓ Handover Confirmed by You'
-            : '⏳ Awaiting Your Handover Confirmation'}
+            : confirmationRecorded
+              ? 'Handover confirmation needs renewing'
+              : '⏳ Awaiting Your Handover Confirmation'}
         </Text>
         <Text style={styles.confirmationBody}>
-          {recipientConfirmed
-            ? 'Your signed-in confirmation is recorded. The donor has up to 5 minutes to complete collection.'
+          {confirmationRecorded
+            ? 'The donor must verify that your confirmation is no more than 5 minutes old and still inside the pickup window. Reconfirm if it has expired.'
             : 'You must confirm handover in your signed-in app when meeting the donor inside the pickup window.'}
         </Text>
       </View>
@@ -152,7 +190,11 @@ export function QrDisplayCard({
           <View
             style={[
               styles.qrContainer,
-              { width: actualGridSize + 16, height: actualGridSize + 16 },
+              {
+                width: actualGridSize + 2 * quietZone,
+                height: actualGridSize + 2 * quietZone,
+                padding: quietZone,
+              },
             ]}
             accessibilityLabel={`Pickup QR code for ${listingTitle || listingId}`}
           >
@@ -184,20 +226,30 @@ export function QrDisplayCard({
       {/* Monospace Reference ID and Fallback */}
       <View style={styles.referenceContainer}>
         <Text style={styles.referenceLabel}>MANUAL REFERENCE ID</Text>
-        <TouchableOpacity
-          accessibilityRole="button"
-          accessibilityLabel={`Copy pickup reference ID ${listingId}`}
-          onPress={handleCopyReference}
-          style={styles.referenceBox}
-        >
-          <Text style={styles.referenceCode}>{listingId}</Text>
-          <Text style={styles.copyHint}>
-            {copied ? '✓ Reference noted' : 'Tap to copy reference'}
+        <View style={styles.referenceBox}>
+          <Text
+            selectable
+            accessibilityLabel="Pickup reference ID"
+            style={styles.referenceCode}
+          >
+            {listingId}
           </Text>
-        </TouchableOpacity>
+          <Text style={styles.copyHint}>
+            Long press the reference to select and copy
+          </Text>
+        </View>
       </View>
 
-      {/* Optional Local Reminder Toggle */}
+      <Text style={styles.caption}>
+        Reminder alerts appear only while this pickup card is open and the app
+        is in the foreground. No background notifications are scheduled.
+      </Text>
+      {reminderError ? (
+        <Text accessibilityRole="alert" style={styles.errorText}>
+          {reminderError}
+        </Text>
+      ) : null}
+      {/* Optional foreground reminder toggle */}
       <TouchableOpacity
         accessibilityRole="button"
         accessibilityLabel={
@@ -220,7 +272,7 @@ export function QrDisplayCard({
             ]}
           >
             {reminderActive
-              ? '🔔 Pickup Reminder Active'
+              ? '🔔 In-App Pickup Reminder Enabled'
               : '🔔 Set In-App Pickup Reminder'}
           </Text>
         )}

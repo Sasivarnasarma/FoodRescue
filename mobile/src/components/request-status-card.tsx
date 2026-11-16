@@ -192,7 +192,7 @@ export function RequestStatusCard({
             listingTitle={listing.title}
             pickupStartsAt={listing.pickupStartsAt}
             pickupDeadline={listing.pickupDeadline}
-            recipientConfirmed={Boolean(request.recipientConfirmedAt)}
+            recipientConfirmedAt={request.recipientConfirmedAt}
           />
         </View>
       )}

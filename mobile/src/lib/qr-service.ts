@@ -46,6 +46,8 @@ export function encodePickupQrPayload(
     throw new Error('QR payload version must be a positive integer.');
   }
 
+  if (version !== CURRENT_QR_VERSION)
+    throw new Error('Unsupported QR version for generation.');
   return `${QR_PREFIX}:v${version}:${listingId.trim()}`;
 }
 

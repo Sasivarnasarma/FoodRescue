@@ -1,5 +1,3 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
 export type PickupWindowPhase =
   'upcoming' | 'active' | 'expiring_soon' | 'expired';
 
@@ -101,7 +99,7 @@ export function getPickupCountdown(
       : `${formatDuration(millisUntilDeadline)} left for pickup`,
     isInsideWindow: true,
     canConfirmHandover: true,
-    canReopenOnCancel: !isExpiringSoon,
+    canReopenOnCancel: millisUntilDeadline >= 15 * 60_000,
   };
 }
 
@@ -126,6 +124,8 @@ export function computeReminderSchedule(
  */
 export async function isPickupReminderSet(listingId: string): Promise<boolean> {
   try {
+    const { default: AsyncStorage } =
+      await import('@react-native-async-storage/async-storage');
     const val = await AsyncStorage.getItem(`${STORAGE_KEY_PREFIX}${listingId}`);
     return val === 'true';
   } catch {
@@ -141,6 +141,8 @@ export async function setPickupReminder(
   enabled: boolean,
 ): Promise<boolean> {
   try {
+    const { default: AsyncStorage } =
+      await import('@react-native-async-storage/async-storage');
     if (enabled) {
       await AsyncStorage.setItem(`${STORAGE_KEY_PREFIX}${listingId}`, 'true');
     } else {

@@ -151,3 +151,10 @@ test('generateQrMatrix produces a square boolean matrix suitable for vector rend
   assert.equal(qr.modules[6][0], true);
   assert.equal(qr.modules[6][6], true);
 });
+
+test('the generator cannot emit a version this app cannot scan', () => {
+  assert.throws(
+    () => encodePickupQrPayload('listing_1', 2),
+    /Unsupported QR version/,
+  );
+});

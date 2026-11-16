@@ -70,3 +70,15 @@ test('computeReminderSchedule calculates checkpoints correctly', () => {
   assert.equal(schedule.expiringSoonAt.getTime(), deadline - 15 * 60_000);
   assert.equal(schedule.deadlineAt.getTime(), deadline);
 });
+
+test('countdown permits reopening at the exact 15-minute boundary', () => {
+  const deadline = 2_000_000;
+  assert.equal(
+    getPickupCountdown(0, deadline, deadline - 900_000).canReopenOnCancel,
+    true,
+  );
+  assert.equal(
+    getPickupCountdown(0, deadline, deadline - 899_999).canReopenOnCancel,
+    false,
+  );
+});
