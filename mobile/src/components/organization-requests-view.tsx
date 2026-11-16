@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -20,7 +21,12 @@ import {
   withdrawDonationRequest,
   type DonationRequest,
 } from '../lib/requests';
-import { deriveRequestState, formatDateText } from '../lib/request-validation';
+import {
+  deriveRequestState,
+  formatDateText,
+  isRecipientAssignment,
+  isRecipientCollection,
+} from '../lib/request-validation';
 
 interface OrganizationRequestsViewProps {
   onSelectListing: (listingId: string) => void;
@@ -74,6 +80,9 @@ export function OrganizationRequestsView({
     {},
   );
   const [withdrawingId, setWithdrawingId] = useState<string | null>(null);
+  const [filterTab, setFilterTab] = useState<
+    'all' | 'pickups' | 'pending' | 'collected'
+  >('all');
 
   // Observe parent states too: approving a different organization does not write this request.
   useEffect(() => {
@@ -238,6 +247,34 @@ export function OrganizationRequestsView({
     );
   }
 
+  const isRequestPickup = (item: DonationRequest) => {
+    const listing = listingsMap[item.listingId];
+    return (
+      isRecipientAssignment(listing, item, currentUid ?? '') &&
+      !!listing.pickupDeadline &&
+      listing.pickupDeadline.getTime() > now.getTime()
+    );
+  };
+  const isRequestCollected = (item: DonationRequest) =>
+    isRecipientCollection(listingsMap[item.listingId], item, currentUid ?? '');
+  const isRequestPending = (item: DonationRequest) =>
+    deriveRequestState(
+      item,
+      listingsMap[item.listingId] ?? null,
+      currentUid ?? '',
+      now,
+    ).status === 'pending';
+  const pickupsCount = requests.filter(isRequestPickup).length;
+  const pendingCount = requests.filter(isRequestPending).length;
+  const collectedCount = requests.filter(isRequestCollected).length;
+
+  const filteredRequests = requests.filter((item) => {
+    if (filterTab === 'pickups') return isRequestPickup(item);
+    if (filterTab === 'pending') return isRequestPending(item);
+    if (filterTab === 'collected') return isRequestCollected(item);
+    return true;
+  });
+
   return (
     <View style={styles.container}>
       {page?.fromCache && (
@@ -248,127 +285,269 @@ export function OrganizationRequestsView({
         </View>
       )}
 
-      <View style={styles.listContent}>
-        {requests.map((item) => {
-          const listing = listingsMap[item.listingId];
-          const derived = deriveRequestState(
-            item,
-            listing ?? null,
-            currentUid ?? '',
-            now,
-          );
-
-          let badgeBg = colors.neutralBg;
-          let badgeText = colors.neutralText;
-          let borderColor = colors.neutralBorder;
-
-          if (derived.tone === 'success') {
-            badgeBg = colors.greenBg;
-            badgeText = colors.greenText;
-            borderColor = colors.greenBorder;
-          } else if (derived.tone === 'warning') {
-            badgeBg = colors.amberBg;
-            badgeText = colors.amber;
-            borderColor = colors.amberBorder;
-          } else if (derived.tone === 'error') {
-            badgeBg = colors.redBg;
-            badgeText = colors.red;
-            borderColor = colors.redBorder;
-          } else if (derived.tone === 'info') {
-            badgeBg = colors.blueBg;
-            badgeText = colors.blue;
-            borderColor = colors.blueBorder;
-          }
-
-          return (
-            <Pressable
-              key={`${item.listingId}_${item.id}`}
-              accessibilityRole="button"
-              accessibilityLabel={`Request for ${listing?.title || 'Donation'}, status: ${derived.label}`}
-              style={({ pressed }) => [
-                styles.requestCard,
-                { borderColor },
-                pressed && styles.cardPressed,
+      <Text>Filters and counts apply to the current page.</Text>
+      {/* Filter Tabs / Segmented Pills */}
+      <View style={styles.filterBarContainer}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterBar}
+        >
+          <Pressable
+            accessibilityRole="tab"
+            accessibilityState={{ selected: filterTab === 'all' }}
+            style={[
+              styles.filterTab,
+              filterTab === 'all' && styles.filterTabActive,
+            ]}
+            onPress={() => setFilterTab('all')}
+          >
+            <Text
+              style={[
+                styles.filterTabText,
+                filterTab === 'all' && styles.filterTabTextActive,
               ]}
-              onPress={() => onSelectListing(item.listingId)}
             >
-              <View style={styles.cardHeader}>
-                <View style={styles.titleColumn}>
-                  <Text style={styles.listingTitle}>
-                    {parentErrors[item.listingId] ||
-                      (listing ? listing.title : 'Loading donation details…')}
-                  </Text>
-                  {listing && (
-                    <Text style={styles.listingProvider}>
-                      {listing.providerName} • {listing.quantity} {listing.unit}
+              All ({requests.length})
+            </Text>
+          </Pressable>
+
+          <Pressable
+            accessibilityRole="tab"
+            accessibilityState={{ selected: filterTab === 'pickups' }}
+            style={[
+              styles.filterTab,
+              filterTab === 'pickups' && styles.filterTabActive,
+            ]}
+            onPress={() => setFilterTab('pickups')}
+          >
+            <Text
+              style={[
+                styles.filterTabText,
+                filterTab === 'pickups' && styles.filterTabTextActive,
+              ]}
+            >
+              Active Pickups ({pickupsCount})
+            </Text>
+          </Pressable>
+
+          <Pressable
+            accessibilityRole="tab"
+            accessibilityState={{ selected: filterTab === 'pending' }}
+            style={[
+              styles.filterTab,
+              filterTab === 'pending' && styles.filterTabActive,
+            ]}
+            onPress={() => setFilterTab('pending')}
+          >
+            <Text
+              style={[
+                styles.filterTabText,
+                filterTab === 'pending' && styles.filterTabTextActive,
+              ]}
+            >
+              Pending ({pendingCount})
+            </Text>
+          </Pressable>
+
+          <Pressable
+            accessibilityRole="tab"
+            accessibilityState={{ selected: filterTab === 'collected' }}
+            style={[
+              styles.filterTab,
+              filterTab === 'collected' && styles.filterTabActive,
+            ]}
+            onPress={() => setFilterTab('collected')}
+          >
+            <Text
+              style={[
+                styles.filterTabText,
+                filterTab === 'collected' && styles.filterTabTextActive,
+              ]}
+            >
+              Collection History ({collectedCount})
+            </Text>
+          </Pressable>
+        </ScrollView>
+      </View>
+
+      {filteredRequests.length === 0 ? (
+        <View style={styles.emptyFilterContainer}>
+          <Text style={styles.emptyFilterTitle}>
+            {filterTab === 'pickups'
+              ? 'No Active Pickups'
+              : filterTab === 'collected'
+                ? 'No Collection History Yet'
+                : filterTab === 'pending'
+                  ? 'No Pending Requests'
+                  : 'No Requests Found'}
+          </Text>
+          <Text style={styles.emptyFilterText}>
+            {filterTab === 'pickups'
+              ? 'When a donor approves your request, your pickup screen with the QR reference code and handover confirmation will appear here.'
+              : filterTab === 'collected'
+                ? 'Completed collections with donors will appear here with handover timestamps and receipts.'
+                : filterTab === 'pending'
+                  ? 'You have no requests currently awaiting donor review.'
+                  : 'No requests match the selected filter.'}
+          </Text>
+          {filterTab !== 'all' && (
+            <Pressable
+              accessibilityRole="button"
+              style={styles.resetFilterButton}
+              onPress={() => setFilterTab('all')}
+            >
+              <Text style={styles.resetFilterButtonText}>
+                Show All Requests
+              </Text>
+            </Pressable>
+          )}
+        </View>
+      ) : (
+        <View style={styles.listContent}>
+          {filteredRequests.map((item) => {
+            const listing = listingsMap[item.listingId];
+            const derived = deriveRequestState(
+              item,
+              listing ?? null,
+              currentUid ?? '',
+              now,
+            );
+            const isApproved = isRequestPickup(item);
+            const isCollected = isRequestCollected(item);
+
+            let badgeBg = colors.neutralBg;
+            let badgeText = colors.neutralText;
+            let borderColor = colors.neutralBorder;
+
+            if (derived.tone === 'success') {
+              badgeBg = colors.greenBg;
+              badgeText = colors.greenText;
+              borderColor = colors.greenBorder;
+            } else if (derived.tone === 'warning') {
+              badgeBg = colors.amberBg;
+              badgeText = colors.amber;
+              borderColor = colors.amberBorder;
+            } else if (derived.tone === 'error') {
+              badgeBg = colors.redBg;
+              badgeText = colors.red;
+              borderColor = colors.redBorder;
+            } else if (derived.tone === 'info') {
+              badgeBg = colors.blueBg;
+              badgeText = colors.blue;
+              borderColor = colors.blueBorder;
+            }
+
+            return (
+              <Pressable
+                key={`${item.listingId}_${item.id}`}
+                accessibilityRole="button"
+                accessibilityLabel={`Request for ${listing?.title || 'Donation'}, status: ${derived.label}`}
+                style={({ pressed }) => [
+                  styles.requestCard,
+                  { borderColor },
+                  pressed && styles.cardPressed,
+                ]}
+                onPress={() => onSelectListing(item.listingId)}
+              >
+                <View style={styles.cardHeader}>
+                  <View style={styles.titleColumn}>
+                    <Text style={styles.listingTitle}>
+                      {parentErrors[item.listingId] ||
+                        (listing ? listing.title : 'Loading donation details…')}
                     </Text>
+                    {listing && (
+                      <Text style={styles.listingProvider}>
+                        {listing.providerName} • {listing.quantity}{' '}
+                        {listing.unit}
+                      </Text>
+                    )}
+                  </View>
+                  <View style={[styles.badge, { backgroundColor: badgeBg }]}>
+                    <Text style={[styles.badgeLabel, { color: badgeText }]}>
+                      {derived.label}
+                    </Text>
+                  </View>
+                </View>
+
+                {isApproved && (
+                  <View style={styles.pickupCallout}>
+                    <Text style={styles.pickupCalloutText}>
+                      ✓ Approved — Tap to open QR reference & confirm handover
+                    </Text>
+                  </View>
+                )}
+                {isCollected && (
+                  <View style={styles.collectedCallout}>
+                    <Text style={styles.collectedCalloutText}>
+                      ✓ Collected — Tap to view collection receipt
+                    </Text>
+                  </View>
+                )}
+
+                <View style={styles.cardDetails}>
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Proposed Pickup:</Text>
+                    <Text style={styles.infoValue}>
+                      {formatDateText(item.plannedPickupAt)}
+                    </Text>
+                  </View>
+                  {listing && (
+                    <View style={styles.infoRow}>
+                      <Text style={styles.infoLabel}>Pickup Window:</Text>
+                      <Text style={styles.infoValue}>
+                        {formatDateText(listing.pickupStartsAt)} –{' '}
+                        {formatDateText(listing.pickupDeadline)}
+                      </Text>
+                    </View>
+                  )}
+                  {item.createdAt && (
+                    <View style={styles.infoRow}>
+                      <Text style={styles.infoLabel}>Requested On:</Text>
+                      <Text style={styles.infoValue}>
+                        {formatDateText(item.createdAt)}
+                      </Text>
+                    </View>
                   )}
                 </View>
-                <View style={[styles.badge, { backgroundColor: badgeBg }]}>
-                  <Text style={[styles.badgeLabel, { color: badgeText }]}>
-                    {derived.label}
-                  </Text>
-                </View>
-              </View>
 
-              <View style={styles.cardDetails}>
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Proposed Pickup:</Text>
-                  <Text style={styles.infoValue}>
-                    {formatDateText(item.plannedPickupAt)}
+                {/* Action buttons inside card */}
+                <View style={styles.cardFooter}>
+                  <Text style={styles.viewDetailLink}>
+                    {isApproved
+                      ? 'Open Pickup & QR Reference →'
+                      : isCollected
+                        ? 'View Handover Receipt →'
+                        : 'View Donation Details →'}
                   </Text>
+                  {derived.canWithdraw && (
+                    <Pressable
+                      accessibilityRole="button"
+                      style={styles.withdrawAction}
+                      onPress={(event) => {
+                        event.stopPropagation();
+                        handleWithdraw(item.listingId);
+                      }}
+                      disabled={
+                        !!withdrawingId ||
+                        page?.fromCache ||
+                        page?.hasPendingWrites ||
+                        !parentConfirmed[item.listingId]
+                      }
+                    >
+                      {withdrawingId === item.listingId ? (
+                        <ActivityIndicator size="small" color={colors.red} />
+                      ) : (
+                        <Text style={styles.withdrawActionText}>Withdraw</Text>
+                      )}
+                    </Pressable>
+                  )}
                 </View>
-                {listing && (
-                  <View style={styles.infoRow}>
-                    <Text style={styles.infoLabel}>Pickup Window:</Text>
-                    <Text style={styles.infoValue}>
-                      {formatDateText(listing.pickupStartsAt)} –{' '}
-                      {formatDateText(listing.pickupDeadline)}
-                    </Text>
-                  </View>
-                )}
-                {item.createdAt && (
-                  <View style={styles.infoRow}>
-                    <Text style={styles.infoLabel}>Requested On:</Text>
-                    <Text style={styles.infoValue}>
-                      {formatDateText(item.createdAt)}
-                    </Text>
-                  </View>
-                )}
-              </View>
-
-              {/* Action buttons inside card */}
-              <View style={styles.cardFooter}>
-                <Text style={styles.viewDetailLink}>
-                  View Donation Details →
-                </Text>
-                {derived.canWithdraw && (
-                  <Pressable
-                    accessibilityRole="button"
-                    style={styles.withdrawAction}
-                    onPress={(event) => {
-                      event.stopPropagation();
-                      handleWithdraw(item.listingId);
-                    }}
-                    disabled={
-                      !!withdrawingId ||
-                      page?.fromCache ||
-                      page?.hasPendingWrites ||
-                      !parentConfirmed[item.listingId]
-                    }
-                  >
-                    {withdrawingId === item.listingId ? (
-                      <ActivityIndicator size="small" color={colors.red} />
-                    ) : (
-                      <Text style={styles.withdrawActionText}>Withdraw</Text>
-                    )}
-                  </Pressable>
-                )}
-              </View>
-            </Pressable>
-          );
-        })}
-      </View>
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
       <View style={{ flexDirection: 'row', gap: 16, padding: 12 }}>
         <Pressable
           accessibilityRole="button"
@@ -576,5 +755,96 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.red,
     fontWeight: '700',
+  },
+  filterBarContainer: {
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    paddingVertical: 10,
+  },
+  filterBar: {
+    paddingHorizontal: 16,
+    gap: 8,
+    flexDirection: 'row',
+  },
+  filterTab: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  filterTabActive: {
+    backgroundColor: colors.greenBg,
+    borderColor: colors.greenBorder,
+  },
+  filterTabText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.secondary,
+  },
+  filterTabTextActive: {
+    color: colors.greenText,
+    fontWeight: '700',
+  },
+  emptyFilterContainer: {
+    padding: 32,
+    margin: 16,
+    backgroundColor: colors.surface,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    gap: 8,
+  },
+  emptyFilterTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  emptyFilterText: {
+    fontSize: 13,
+    color: colors.secondary,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  resetFilterButton: {
+    marginTop: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: colors.greenBg,
+  },
+  resetFilterButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.greenText,
+  },
+  pickupCallout: {
+    backgroundColor: colors.greenBg,
+    borderRadius: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: colors.greenBorder,
+  },
+  pickupCalloutText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.greenText,
+  },
+  collectedCallout: {
+    backgroundColor: '#F1F5F9',
+    borderRadius: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  collectedCalloutText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.secondary,
   },
 });

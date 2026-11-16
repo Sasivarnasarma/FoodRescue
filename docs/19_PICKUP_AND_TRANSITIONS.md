@@ -1,6 +1,6 @@
 # Phase 4 pickup rules and shared helpers
 
-Member 3 implements the shared data operations and rules. Donor/recipient pickup screens, QR display/scanning, manual reference entry, reminders and admin/demo integration remain the other members' tasks.
+Members 1, 2, 3 and 5 provide donor and recipient pickup screens, shared data operations and rules, QR scanning/display, manual references and foreground reminders. Member 4 provides admin verification feedback/audit history and assigned-donation demo data. Physical-device acceptance remains pending.
 
 ## Pickup contract
 
@@ -36,6 +36,30 @@ Every operation waits for authentication restoration and uses a transaction, inc
 
 Use existing `subscribeToListing` and `subscribeToMyRequestForListing` callbacks for live state, including cache/pending metadata. Cached state is informational; do not enable pickup actions until the listing and request are confirmed by the server. Existing listing parsing exposes `collectedAt`; request parsing exposes `recipientConfirmedAt`. History remains based on authorized listing/request reads; no new collection or index is needed for these operations.
 
+## Shared QR and reference components (Member 5)
+
+Member 5 implements the shared QR display, camera scanning, manual reference fallback, and pickup reminder utilities:
+
+- `mobile/src/lib/qr-service.ts`:
+  - `CURRENT_QR_VERSION = 1`, `QR_PREFIX = 'foodrescue'`.
+  - `encodePickupQrPayload(listingId, version?)`: produces versioned payload `foodrescue:v1:<listingId>`.
+  - `parsePickupReference(rawInput)`: strictly validates scanned QR payload or manual reference input. Strips whitespace, rejects arbitrary URLs (e.g. `https://...`) to prevent phishing or redirection, enforces maximum payload length, validates QR version, and validates listing ID format. Supports entering either full payload or plain reference ID.
+  - `generateQrMatrix(payload)`: generates a 2D boolean module matrix for pure React Native vector rendering.
+- `mobile/src/lib/pickup-reminders.ts`:
+  - `getPickupCountdown(startsAt, deadline, now?)`: models pickup window progression across `upcoming`, `active`, `expiring_soon` (<= 15 minutes before deadline), and `expired` phases.
+  - `computeReminderSchedule(listingId, startsAt, deadline)`: calculates reminder checkpoints.
+  - `isPickupReminderSet(listingId)` & `setPickupReminder(listingId, enabled)`: manages persistent in-app local pickup reminder preferences in `AsyncStorage`.
+- `mobile/src/components/qr-display-card.tsx`:
+  - Recipient pickup display card rendering a crisp vector-grid QR code without native SVG dependencies.
+  - Displays a selectable monospace Reference ID for native long-press copying.
+  - Shows real-time window timing/countdown badge and handover confirmation guidance.
+  - In-app pickup reminder toggle button.
+  - Embedded into `mobile/src/components/request-status-card.tsx` for approved requests.
+- `mobile/src/components/qr-scanner-card.tsx`:
+  - Donor scanner component with live `CameraView` barcode scanner, target reticle overlay, and camera permission handling (request prompt, denial banner, and device Settings link).
+  - Integrated "Enter Manually" tab providing full manual reference entry fallback without camera.
+  - In-place QR payload validation and optional `expectedListingId` match verification.
+
 ## Verification and deployment
 
 From the repository root:
@@ -57,6 +81,24 @@ pnpm --dir firebase exec firebase deploy --only firestore:rules --project foodre
 ```
 
 No deployment was performed during this review. After the other pickup screens are integrated, rehearse on two physical Android devices: confirm then collect, clear and reconfirm, let confirmation expire, cancel with and without enough remaining time, close as donor, and reconcile an overdue assignment. Verify both devices show the same committed state and denied/duplicate actions show errors. Physical testing is pending; automated checks do not verify QR camera behavior.
+
+QR review: the standard payload is `foodrescue:v1:<listingId>`. Unsupported versions and arbitrary URLs are rejected. Render at least four white modules around the QR for scanning. Reference text is selectable for native copy. Optional reminders are foreground alerts while the pickup card is open; no background notification is scheduled. A failed preference save is shown as an error. Scanner events and manual lookup share one submission lock, and the camera is paused after a scan or when inactive.
+
+## Donor pickup integration
+
+The donor donations feed opens assigned pickup details and collected receipts. The scanner resolves an owned listing through the shared QR/reference contract. Live listing/request listeners drive confirmation readiness, collection, assignment release, donor close and overdue expiry reconciliation. Physical Android acceptance is still pending.
+
+Donor PR review: the donor scanner wraps `QrScannerCard` and uses the same `foodrescue:v1:<listingId>` payload as the recipient display. Legacy JSON/URL parsing was removed. Lookup checks donor ownership, rejects stale callbacks after closing the scanner, and serializes repeated scans. Pickup actions wait for server-confirmed listing and matching request snapshots; load failures have a retry action. Overdue open/assigned donations offer expiry reconciliation; already-expired records do not repeat that operation. Receipt labels describe recorded donor/recipient actions without claiming that storage handling or QR scanning was independently verified.
+
+Combined review verification: 63 mobile tests and 44 rules tests pass, together with lint, formatting, TypeScript and Android bundling. Native scanning and two-phone handover still require physical-device acceptance. Recipient pickup confirmation/history and admin/demo integration remain pending tasks.
+
+## Recipient pickup integration
+
+Recipient pickup details include the shared QR reference, signed-in confirmation/retraction, expiry reconciliation, release/cancellation and own collection receipts. Request-history filters operate on the current bounded page. Native two-phone acceptance is pending.
+
+Recipient PR review: pickup uses the shared real QR generator and preserves the original case-sensitive listing ID as the manual reference. Confirmation and expiry actions require the matching selected organization, valid pickup timing and confirmed server metadata; pending writes block actions and duplicate mutations are serialized. Collection receipts/history require both the matching request and parent listing to be collected for the current organization. A donation collected by another organization is labelled accordingly and is excluded from own collection history. Invalid windows and stale/future confirmations do not enable handover.
+
+Latest recipient integration checks: 71 mobile tests and 44 rules tests, mobile lint, formatting, TypeScript and Android bundling pass. Physical camera scanning, two-phone confirmation/collection and background/foreground behavior remain manual acceptance steps.
 
 ## Assigned donation demo data (Member 4)
 

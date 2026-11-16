@@ -13,6 +13,8 @@ import type { FoodListing } from '@/lib/listings';
 import { DonorIncomingRequests } from '@/components/donor-incoming-requests';
 import { DonorListingForm } from '@/components/donor-listing-form';
 import { DonorListingsFeed } from '@/components/donor-listings-feed';
+import { DonorPickupScanner } from '@/components/donor-pickup-scanner';
+import { DonorPickupScreen } from '@/components/donor-pickup-screen';
 import { useDonorProfile } from '@/hooks/use-donor-profile';
 import { signOutAccount } from '@/lib/auth';
 import { submitProfile } from '@/lib/verification';
@@ -42,8 +44,9 @@ export function DonorProfile({ user }: { user: User }) {
   const [editing, setEditing] = useState<FoodListing>();
   const [selectedListing, setSelectedListing] = useState<FoodListing>();
   const [notice, setNotice] = useState('');
+  const [scannerVisible, setScannerVisible] = useState(false);
   const [viewMode, setViewMode] = useState<
-    'profile' | 'feed' | 'create' | 'requests'
+    'profile' | 'feed' | 'create' | 'requests' | 'pickup'
   >('profile');
   const [message, setMessage] = useState('');
 
@@ -204,6 +207,11 @@ export function DonorProfile({ user }: { user: User }) {
               onPress={() => setViewMode('feed')}
               secondary
             />
+            <AccountButton
+              label="📷 Scan Pickup QR / Handover"
+              onPress={() => setScannerVisible(true)}
+              secondary
+            />
           </View>
         )}
         {status === 'rejected' && (
@@ -247,6 +255,18 @@ export function DonorProfile({ user }: { user: User }) {
     );
   }
 
+  if (canManage && viewMode === 'pickup' && selectedListing) {
+    return (
+      <View style={{ flex: 1, minHeight: 450 }}>
+        <DonorPickupScreen
+          key={selectedListing.id}
+          listing={selectedListing}
+          onBack={() => setViewMode('feed')}
+        />
+      </View>
+    );
+  }
+
   if (canManage && viewMode === 'feed') {
     return (
       <View style={{ flex: 1, minHeight: 450 }}>
@@ -264,6 +284,11 @@ export function DonorProfile({ user }: { user: User }) {
             setSelectedListing(listing);
             setViewMode('requests');
           }}
+          onOpenPickup={(listing) => {
+            setSelectedListing(listing);
+            setViewMode('pickup');
+          }}
+          onScanPress={() => setScannerVisible(true)}
         />
         <View style={{ padding: 16 }}>
           <AccountButton
@@ -272,6 +297,14 @@ export function DonorProfile({ user }: { user: User }) {
             secondary
           />
         </View>
+        <DonorPickupScanner
+          visible={scannerVisible && canManage}
+          onClose={() => setScannerVisible(false)}
+          onSelectListing={(listing) => {
+            setSelectedListing(listing);
+            setViewMode('pickup');
+          }}
+        />
       </View>
     );
   }
@@ -293,6 +326,14 @@ export function DonorProfile({ user }: { user: User }) {
         disabled={!!busy}
         onPress={signOut}
         secondary
+      />
+      <DonorPickupScanner
+        visible={scannerVisible && canManage}
+        onClose={() => setScannerVisible(false)}
+        onSelectListing={(listing) => {
+          setSelectedListing(listing);
+          setViewMode('pickup');
+        }}
       />
     </View>
   );

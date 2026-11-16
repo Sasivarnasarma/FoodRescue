@@ -1,3 +1,4 @@
+import { useCurrentTime } from '@/hooks/use-current-time';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -21,17 +22,22 @@ interface DonorListingsFeedProps {
   onCreatePress: () => void;
   onEditDraft: (listing: FoodListing) => void;
   onViewRequests?: (listing: FoodListing) => void;
+  onOpenPickup?: (listing: FoodListing) => void;
+  onScanPress?: () => void;
 }
 
 export function DonorListingsFeed({
   onCreatePress,
   onEditDraft,
   onViewRequests,
+  onOpenPickup,
+  onScanPress,
 }: DonorListingsFeedProps) {
   const [page, setPage] = useState<ListingPage>();
   const [cursors, setCursors] = useState<ListingPageOptions[]>([{}]);
   const [attempt, setAttempt] = useState(0);
   const options = cursors[cursors.length - 1];
+  const now = useCurrentTime();
   const [listings, setListings] = useState<FoodListing[]>([]);
   const [loading, setLoading] = useState(true);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
@@ -221,8 +227,39 @@ export function DonorListingsFeed({
             style={styles.reviewRequestsButton}
             onPress={() => onViewRequests?.(item)}
           >
-            <Text style={styles.reviewRequestsText}>
-              View Requests / Assignment
+            <Text style={styles.reviewRequestsText}>View Requests</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            accessibilityRole="button"
+            style={styles.pickupButton}
+            onPress={() => onOpenPickup?.(item)}
+          >
+            <Text style={styles.pickupButtonText}>Handover & Pickup →</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+      {item.status === 'open' &&
+        item.pickupDeadline &&
+        item.pickupDeadline.getTime() <= now.getTime() && (
+          <TouchableOpacity
+            accessibilityRole="button"
+            onPress={() => onOpenPickup?.(item)}
+            style={styles.pickupButton}
+          >
+            <Text style={styles.pickupButtonText}>
+              Review expired pickup window
+            </Text>
+          </TouchableOpacity>
+        )}
+      {item.status === 'collected' && (
+        <View style={styles.cardActions}>
+          <TouchableOpacity
+            accessibilityRole="button"
+            style={styles.receiptButton}
+            onPress={() => onOpenPickup?.(item)}
+          >
+            <Text style={styles.receiptButtonText}>
+              View Collection Receipt
             </Text>
           </TouchableOpacity>
         </View>
@@ -248,9 +285,21 @@ export function DonorListingsFeed({
             Manage your surplus food listings
           </Text>
         </View>
-        <TouchableOpacity style={styles.createButton} onPress={onCreatePress}>
-          <Text style={styles.createButtonText}>+ New Offer</Text>
-        </TouchableOpacity>
+        <View style={styles.topBarButtons}>
+          {onScanPress && (
+            <TouchableOpacity
+              accessibilityLabel="Scan QR code or look up reference"
+              accessibilityRole="button"
+              style={styles.scanButton}
+              onPress={onScanPress}
+            >
+              <Text style={styles.scanButtonText}>📷 Scan / Lookup</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity style={styles.createButton} onPress={onCreatePress}>
+            <Text style={styles.createButtonText}>+ New Offer</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {errorMessage ? (
@@ -467,6 +516,48 @@ const styles = StyleSheet.create({
     color: '#167044',
     fontSize: 13,
     fontWeight: '700',
+  },
+  pickupButton: {
+    backgroundColor: '#167044',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+  },
+  pickupButtonText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  receiptButton: {
+    backgroundColor: '#f8fafc',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+  },
+  receiptButtonText: {
+    color: '#475569',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  topBarButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  scanButton: {
+    backgroundColor: '#f1f5f9',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+  },
+  scanButtonText: {
+    color: '#334155',
+    fontSize: 13,
+    fontWeight: '600',
   },
   cancelActionButton: {
     paddingVertical: 4,
