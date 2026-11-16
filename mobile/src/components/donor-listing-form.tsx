@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -208,7 +209,11 @@ export function DonorListingForm({
   }
 
   return (
-    <View style={styles.container}>
+    <ScrollView
+      style={styles.scroll}
+      contentContainerStyle={styles.container}
+      keyboardShouldPersistTaps="handled"
+    >
       <View style={styles.header}>
         <Text accessibilityRole="header" style={styles.title}>
           {initial ? 'Edit draft' : 'New donation'}
@@ -241,7 +246,7 @@ export function DonorListingForm({
         />
         {choices('Category', FOOD_CATEGORIES, category, setCategory)}
         <View style={styles.quantityRow}>
-          <View style={{ flex: 1 }}>
+          <View style={styles.quantityColumn}>
             <AccountField
               label="Whole quantity"
               value={quantity}
@@ -250,7 +255,7 @@ export function DonorListingForm({
               editable={!busy}
             />
           </View>
-          <View style={{ flex: 1 }}>
+          <View style={styles.quantityColumn}>
             {choices(
               'Unit',
               ['pack', 'portion', 'item', 'g'] as const,
@@ -376,13 +381,17 @@ export function DonorListingForm({
           onPress={onCancel}
         />
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
+  scroll: {
+    flex: 1,
+  },
   container: {
     gap: 16,
+    paddingBottom: 24,
   },
   header: {
     marginBottom: 4,
@@ -435,6 +444,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   choiceChip: {
+    maxWidth: '100%',
     backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: '#CBD5E1',
@@ -457,8 +467,14 @@ const styles = StyleSheet.create({
   },
   quantityRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 12,
     alignItems: 'flex-start',
+  },
+  quantityColumn: {
+    flexBasis: 140,
+    flexGrow: 1,
+    flexShrink: 1,
   },
   helperNoteBox: {
     backgroundColor: '#EFF6FF',
