@@ -300,7 +300,7 @@ export function DonorProfile({ user }: { user: User }) {
           </View>
           <View style={styles.appHeaderRight}>
             <View style={styles.verifiedPartnerBadge}>
-              <Text style={styles.verifiedPartnerText}>✓ Verified Donor</Text>
+              <Text style={styles.verifiedPartnerText}>Donor</Text>
             </View>
             <Pressable
               accessibilityRole="button"
@@ -647,8 +647,6 @@ const styles = StyleSheet.create({
   },
   appHeader: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
@@ -656,17 +654,18 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
+    gap: 8,
   },
   appHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    flexBasis: 160,
-    flexGrow: 1,
-    flexShrink: 1,
+    flex: 1,
+    minWidth: 0,
   },
   appHeaderTexts: {
-    flexShrink: 1,
+    flex: 1,
+    minWidth: 0,
   },
   appHeaderLogoBadge: {
     width: 34,
@@ -685,14 +684,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#64748B',
     fontWeight: '500',
-    maxWidth: 140,
+    maxWidth: 160,
   },
   appHeaderRight: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    flexShrink: 1,
     alignItems: 'center',
     gap: 8,
+    flexShrink: 0,
   },
   verifiedPartnerBadge: {
     backgroundColor: '#DCFCE7',
