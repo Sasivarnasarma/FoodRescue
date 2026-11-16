@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,7 +15,6 @@ import {
   subscribeToListing,
   type FoodListing,
   type ListingPage,
-  type ListingPageOptions,
 } from '../lib/listings';
 import {
   subscribeToOrganizationRequests,
@@ -67,8 +67,10 @@ export function OrganizationRequestsView({
   const currentUid = auth.currentUser?.uid;
 
   const now = useCurrentTime();
-  const [cursors, setCursors] = useState<ListingPageOptions[]>([{}]);
-  const options = cursors[cursors.length - 1];
+  const INITIAL_LIMIT = 10;
+  const [displayLimit, setDisplayLimit] = useState(INITIAL_LIMIT);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [parentConfirmed, setParentConfirmed] = useState<
     Record<string, boolean>
   >({});
@@ -104,6 +106,7 @@ export function OrganizationRequestsView({
             setRequests(items);
             setPage(metadata);
             setLoading(false);
+            setLoadingMore(false);
             setError('');
             const ids = new Set(items.map((item) => item.listingId));
             for (const [id, unsubscribe] of parents) {
@@ -148,14 +151,16 @@ export function OrganizationRequestsView({
             if (!active) return;
             setError(cause.message || 'Could not load your requests. Retry.');
             setLoading(false);
+            setLoadingMore(false);
           },
-          options,
+          { limit: displayLimit },
         );
       })
       .catch(() => {
         if (active) {
           setError('Could not load your requests. Retry.');
           setLoading(false);
+          setLoadingMore(false);
         }
       });
     return () => {
@@ -163,7 +168,23 @@ export function OrganizationRequestsView({
       stop?.();
       for (const unsubscribe of parents.values()) unsubscribe();
     };
-  }, [currentUid, attempt, options]);
+  }, [currentUid, attempt, displayLimit]);
+
+  const handleLoadMore = () => {
+    if (loadingMore) return;
+    setLoadingMore(true);
+    setDisplayLimit((prev) => prev + 10);
+  };
+
+  const handleRefresh = () => {
+    setRefreshing(true);
+    setDisplayLimit(INITIAL_LIMIT);
+    setAttempt((v) => v + 1);
+    setTimeout(() => setRefreshing(false), 500);
+  };
+
+  const hasMore =
+    page?.nextCursor !== null || requests.length >= displayLimit;
   const handleWithdraw = (listingId: string) => {
     if (
       !currentUid ||
@@ -231,10 +252,8 @@ export function OrganizationRequestsView({
   if (requests.length === 0) {
     return (
       <View style={styles.emptyContainer}>
-        <Text style={styles.emptyTitle}>No requests on this page</Text>
-        <Pressable accessibilityRole="button" onPress={() => setCursors([{}])}>
-          <Text>Return to first page</Text>
-        </Pressable>
+        <Text style={styles.emptyIcon}>📋</Text>
+        <Text style={styles.emptyTitle}>No Requests Yet</Text>
         <Text style={styles.emptyText}>
           Your organization has not submitted any donation requests. Browse
           nearby surplus donations to request whole listings for pickup.
@@ -283,6 +302,26 @@ export function OrganizationRequestsView({
       style={styles.container}
       contentContainerStyle={styles.scrollContent}
       keyboardShouldPersistTaps="handled"
+      nestedScrollEnabled={true}
+      showsVerticalScrollIndicator={true}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={handleRefresh}
+          colors={[colors.green]}
+          tintColor={colors.green}
+        />
+      }
+      onScroll={({ nativeEvent }) => {
+        const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
+        const isCloseToBottom =
+          layoutMeasurement.height + contentOffset.y >=
+          contentSize.height - 150;
+        if (isCloseToBottom && hasMore && !loadingMore && !loading && !error) {
+          handleLoadMore();
+        }
+      }}
+      scrollEventThrottle={100}
     >
       {page?.fromCache && (
         <View style={styles.cachedBanner}>
@@ -291,8 +330,6 @@ export function OrganizationRequestsView({
           </Text>
         </View>
       )}
-
-      <Text>Filters and counts apply to the current page.</Text>
       {/* Filter Tabs / Segmented Pills */}
       <View style={styles.filterBarContainer}>
         <ScrollView
@@ -556,34 +593,33 @@ export function OrganizationRequestsView({
           })}
         </View>
       )}
-      <View
-        style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 16, padding: 12 }}
-      >
-        <Pressable
-          accessibilityRole="button"
-          disabled={cursors.length === 1}
-          onPress={() => setCursors((v) => v.slice(0, -1))}
-        >
-          <Text>Previous</Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => setAttempt((v) => v + 1)}
-        >
-          <Text>Refresh</Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          disabled={
-            !page?.nextCursor || page.fromCache || page.hasPendingWrites
-          }
-          onPress={() => {
-            if (page?.nextCursor)
-              setCursors((v) => [...v, { after: page.nextCursor! }]);
-          }}
-        >
-          <Text>Next</Text>
-        </Pressable>
+      {/* Infinite Scroll Footer */}
+      <View style={styles.infiniteScrollFooter}>
+        {loadingMore ? (
+          <View style={styles.loadingMoreRow}>
+            <ActivityIndicator size="small" color={colors.green} />
+            <Text style={styles.loadingMoreText}>
+              Loading more requests…
+            </Text>
+          </View>
+        ) : hasMore && requests.length >= displayLimit ? (
+          <Pressable
+            accessibilityRole="button"
+            style={styles.loadMoreButton}
+            onPress={handleLoadMore}
+          >
+            <Text style={styles.loadMoreButtonText}>
+              Scroll or tap to load more
+            </Text>
+          </Pressable>
+        ) : requests.length > 0 ? (
+          <View style={styles.endOfFeedRow}>
+            <Text style={styles.endOfFeedText}>
+              ✨ All caught up ({filteredRequests.length}{' '}
+              {filteredRequests.length === 1 ? 'request' : 'requests'} displayed)
+            </Text>
+          </View>
+        ) : null}
       </View>
     </ScrollView>
   );
@@ -592,14 +628,18 @@ export function OrganizationRequestsView({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#F4F8F5',
   },
   scrollContent: {
-    paddingBottom: 24,
+    paddingBottom: 120,
+    width: '100%',
+    maxWidth: 600,
+    alignSelf: 'center',
   },
   listContent: {
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingTop: 12,
     gap: 12,
-    paddingBottom: 40,
   },
   centerContainer: {
     padding: 32,
@@ -650,6 +690,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     margin: 16,
+  },
+  emptyIcon: {
+    fontSize: 36,
+    marginBottom: 4,
   },
   emptyTitle: {
     fontSize: 18,
@@ -861,5 +905,48 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: colors.secondary,
+  },
+  infiniteScrollFooter: {
+    paddingVertical: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingMoreRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+  },
+  loadingMoreText: {
+    fontSize: 13,
+    color: colors.green,
+    fontWeight: '600',
+  },
+  loadMoreButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 20,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  loadMoreButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  endOfFeedRow: {
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  endOfFeedText: {
+    fontSize: 12,
+    color: '#94A3B8',
+    fontWeight: '500',
   },
 });
