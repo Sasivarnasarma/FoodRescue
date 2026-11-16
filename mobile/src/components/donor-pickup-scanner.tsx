@@ -129,7 +129,7 @@ export function DonorPickupScanner({
                 Pickup QR Scanner
               </Text>
               <Text style={styles.headerSubtitle}>
-                Scan recipient's pickup QR code or look up reference
+                Scan recipient&apos;s pickup QR code or look up reference
               </Text>
             </View>
             <TouchableOpacity
@@ -223,8 +223,8 @@ export function DonorPickupScanner({
                       Camera Permission Required
                     </Text>
                     <Text style={styles.cardBody}>
-                      Allow FoodRescue to use your camera so you can quickly scan
-                      recipient pickup QR codes during handover.
+                      Allow FoodRescue to use your camera so you can quickly
+                      scan recipient pickup QR codes during handover.
                     </Text>
                     {permission?.canAskAgain === false ? (
                       <AccountButton
@@ -233,9 +233,7 @@ export function DonorPickupScanner({
                       />
                     ) : (
                       <AccountButton
-                        label={
-                          permissionBusy ? 'Requesting…' : 'Enable Camera'
-                        }
+                        label={permissionBusy ? 'Requesting…' : 'Enable Camera'}
                         disabled={permissionBusy}
                         onPress={requestPermission}
                       />
@@ -253,7 +251,7 @@ export function DonorPickupScanner({
                 ) : (
                   <View style={styles.viewfinderContainer}>
                     <CameraView
-                      style={StyleSheet.absoluteFillObject}
+                      style={StyleSheet.absoluteFill}
                       facing="back"
                       barcodeScannerSettings={{
                         barcodeTypes: ['qr'],
@@ -307,8 +305,8 @@ export function DonorPickupScanner({
                   editable={!busy}
                 />
                 <Text style={styles.inputHint}>
-                  You can paste raw JSON, a FoodRescue pickup link, or the direct
-                  donation ID.
+                  You can paste raw JSON, a FoodRescue pickup link, or the
+                  direct donation ID.
                 </Text>
 
                 <AccountButton

@@ -12,13 +12,13 @@ The QR identifies an opaque listing reference and version; it grants no authorit
 
 ## Cancellation and expiry
 
-| Action | Result |
-|---|---|
-| Either participant releases an assignment with at least 15 minutes remaining | Listing becomes open; selected request becomes cancelled |
-| Either participant releases with less than 15 minutes remaining, before deadline | Listing and selected request become cancelled |
-| Donor explicitly closes an assignment before deadline | Listing and selected request become cancelled, even with 15 minutes or more remaining |
-| Assigned recipient attempts to close with at least 15 minutes remaining | Rejected; release must reopen the listing |
-| Owning donor, admin or assigned organization reconciles at/after deadline | Open listing expires; an assigned listing and its selected request expire atomically |
+| Action                                                                           | Result                                                                                |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Either participant releases an assignment with at least 15 minutes remaining     | Listing becomes open; selected request becomes cancelled                              |
+| Either participant releases with less than 15 minutes remaining, before deadline | Listing and selected request become cancelled                                         |
+| Donor explicitly closes an assignment before deadline                            | Listing and selected request become cancelled, even with 15 minutes or more remaining |
+| Assigned recipient attempts to close with at least 15 minutes remaining          | Rejected; release must reopen the listing                                             |
+| Owning donor, admin or assigned organization reconciles at/after deadline        | Open listing expires; an assigned listing and its selected request expire atomically  |
 
 Cancellation and assigned expiry clear both `acceptedOrganizationUid` and `recipientConfirmedAt`. Other pending requests stay unchanged. After reopening, an organization whose request was cancelled cannot resubmit for that listing; other pending proposals are eligible only if still valid. Closed listings cannot reopen. Removing confirmation competes safely with collection: they cannot both succeed against the same approved state.
 
@@ -36,6 +36,45 @@ Every operation waits for authentication restoration and uses a transaction, inc
 
 Use existing `subscribeToListing` and `subscribeToMyRequestForListing` callbacks for live state, including cache/pending metadata. Cached state is informational; do not enable pickup actions until the listing and request are confirmed by the server. Existing listing parsing exposes `collectedAt`; request parsing exposes `recipientConfirmedAt`. History remains based on authorized listing/request reads; no new collection or index is needed for these operations.
 
+## Member 1 — Donor pickup screen and scanner integration
+
+Member 1 connects the camera scanner to the donor pickup screen, displays live recipient confirmation, completes collection inside the pickup window, and updates donor history:
+
+1. **Pickup QR Parser (`mobile/src/lib/pickup-qr.ts`)**:
+   - Parses standard JSON payload (`{"listingId": "...", "version": 1}`), custom deep link URI schemes (`foodrescue://pickup?listingId=...` / `foodrescue://pickup/...`), and manual alphanumeric reference strings.
+   - Generates JSON payload for QR codes via `generatePickupQrPayload(listingId, version)`.
+
+2. **Collection Timing & Eligibility (`mobile/src/lib/pickup-validation.ts`)**:
+   - `checkDonorCollectionEligibility` determines whether collection is ready, awaiting confirmation, expired (> 5 minutes elapsed), outside window (< startsAt), or expired (>= deadline).
+   - Computes `remainingConfirmationMs` for live countdown timers.
+
+3. **Donor Pickup Screen (`mobile/src/components/donor-pickup-screen.tsx`)**:
+   - Subscribes in real time to both listing and approved recipient request.
+   - Live 5-minute security countdown timer with second-by-second updates via `useCurrentTime()`.
+   - Clear visual status panels for:
+     - Ready for collection: displays recipient confirmation time, remaining validity countdown, and primary "Complete Collection Handover" button.
+     - Awaiting recipient confirmation: guides donor to ask recipient to tap "Confirm Handover".
+     - Confirmation expired: prompts recipient to re-confirm handover.
+     - Pickup window closed or deadline expired: offers expiry reconciliation.
+   - Cancellation actions:
+     - "Release Assignment": reopens listing to other organizations if >= 15 min remain.
+     - "Close Donation Listing": permanently cancels listing and approved request.
+     - "Reconcile Expired Donation": marks overdue listing and request as expired.
+   - Completed Collection Receipt: displays official completion timestamp, accepted organization ID, quantity, and food safety handover notice.
+
+4. **Pickup QR Scanner Modal (`mobile/src/components/donor-pickup-scanner.tsx`)**:
+   - Integrated camera scanning via `CameraView` from `expo-camera` with `useDevicePermission('camera')` handling.
+   - Viewfinder overlay targeting frame with green corner guides and scanning feedback.
+   - Full manual reference entry fallback allowing direct input or copy-pasting of references, JSON, or URIs.
+   - Web platform fallback advising manual entry.
+   - Validates that scanned/entered listing exists and is owned by the signed-in donor.
+
+5. **Feed & Profile Navigation (`mobile/src/components/donor-listings-feed.tsx`, `mobile/src/components/donor-profile.tsx`)**:
+   - Feed header bar includes "📷 Scan / Lookup" shortcut.
+   - Assigned cards display "Handover & Pickup →" action.
+   - Collected cards display "View Collection Receipt" action.
+   - Donor profile includes direct "📷 Scan Pickup QR / Handover" shortcut when approved.
+
 ## Verification and deployment
 
 From the repository root:
@@ -48,7 +87,7 @@ pnpm --dir mobile typecheck
 pnpm --dir mobile format:check
 ```
 
-The review passed 41 mobile tests and 44 rules tests. Coverage includes confirmation/retraction ownership, stale/future confirmations, revoked recipient eligibility, replay, atomic cancellation/expiry, admin expiry, detached requests and collection racing with retraction. Pure timing tests cover exact five-minute, 15-minute and deadline boundaries.
+The review passed 54 mobile tests and 44 rules tests. Coverage includes confirmation/retraction ownership, stale/future confirmations, revoked recipient eligibility, replay, atomic cancellation/expiry, admin expiry, detached requests and collection racing with retraction. Pure timing tests cover exact five-minute, 15-minute and deadline boundaries.
 
 The latest rules still need deployment before live integration:
 

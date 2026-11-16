@@ -225,18 +225,14 @@ export function DonorListingsFeed({
             style={styles.reviewRequestsButton}
             onPress={() => onViewRequests?.(item)}
           >
-            <Text style={styles.reviewRequestsText}>
-              View Requests
-            </Text>
+            <Text style={styles.reviewRequestsText}>View Requests</Text>
           </TouchableOpacity>
           <TouchableOpacity
             accessibilityRole="button"
             style={styles.pickupButton}
             onPress={() => onOpenPickup?.(item)}
           >
-            <Text style={styles.pickupButtonText}>
-              Handover & Pickup →
-            </Text>
+            <Text style={styles.pickupButtonText}>Handover & Pickup →</Text>
           </TouchableOpacity>
         </View>
       )}
