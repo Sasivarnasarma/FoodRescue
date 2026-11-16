@@ -23,13 +23,16 @@ import {
   type LocationCoordinates,
 } from '../lib/location-service';
 import { compareDonations } from '../lib/listing-helpers';
+import { matchesDonationSearch } from '../lib/donation-ui';
 import { ListingDetailSheet } from './listing-detail-sheet';
 import { OrganizationRequestsView } from './organization-requests-view';
 
 export function RecipientFeed({
   initialTab = 'feed',
+  readOnly = false,
 }: {
   initialTab?: 'feed' | 'requests';
+  readOnly?: boolean;
 } = {}) {
   const [activeTab, setActiveTab] = useState<'feed' | 'requests'>(initialTab);
   const INITIAL_PAGE_SIZE = 10;
@@ -164,12 +167,7 @@ export function RecipientFeed({
           (listing) =>
             selectedCategory === 'All' || listing.category === selectedCategory,
         )
-        .filter((listing) =>
-          [listing.title, listing.description, listing.providerName].some(
-            (value) =>
-              value.toLowerCase().includes(searchQuery.trim().toLowerCase()),
-          ),
-        )
+        .filter((listing) => matchesDonationSearch(listing, searchQuery))
         .map((listing) => ({
           listing,
           distanceKm:
@@ -220,7 +218,7 @@ export function RecipientFeed({
           <ListingDetailSheet
             key={selected.id}
             listing={selected}
-            listingIsOffline={detail.cached}
+            listingIsOffline={detail.cached || readOnly}
             listingHasPendingWrites={detail.pending}
             recipientLocation={recipientLocation}
             distanceKm={
@@ -316,7 +314,7 @@ export function RecipientFeed({
   };
 
   return (
-    <View style={{ gap: 12 }}>
+    <View style={styles.container}>
       <View style={styles.tabSelector}>
         <TouchableOpacity
           accessibilityRole="tab"
@@ -355,11 +353,16 @@ export function RecipientFeed({
 
       {activeTab === 'requests' ? (
         <OrganizationRequestsView
+          readOnly={readOnly}
           onSelectListing={(id) => setSelectedId(id)}
           onBrowseListings={() => setActiveTab('feed')}
         />
       ) : (
-        <>
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.feedContent}
+          keyboardShouldPersistTaps="handled"
+        >
           <View style={styles.sectionHeader}>
             <Text accessibilityRole="header" style={styles.title}>
               Available donations
@@ -527,7 +530,7 @@ export function RecipientFeed({
               </View>
             ) : null}
           </View>
-        </>
+        </ScrollView>
       )}
     </View>
   );
@@ -546,9 +549,20 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F4F8F5',
+    gap: 12,
+  },
+  scroll: {
+    flex: 1,
+  },
+  feedContent: {
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingBottom: 24,
   },
   sectionHeader: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
     justifyContent: 'space-between',
     alignItems: 'baseline',
     marginTop: 4,
@@ -671,6 +685,8 @@ const styles = StyleSheet.create({
   },
   cardTop: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 8,
@@ -727,6 +743,8 @@ const styles = StyleSheet.create({
   },
   cardFooter: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
     alignItems: 'center',
     paddingTop: 10,
     borderTopWidth: 1,
@@ -863,6 +881,7 @@ const styles = StyleSheet.create({
   },
   tabItem: {
     flex: 1,
+    minWidth: 0,
     paddingVertical: 10,
     alignItems: 'center',
     borderRadius: 8,
@@ -876,6 +895,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   tabItemText: {
+    textAlign: 'center',
     fontSize: 14,
     fontWeight: '600',
     color: '#64748B',

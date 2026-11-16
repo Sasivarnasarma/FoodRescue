@@ -29,6 +29,7 @@ import {
 } from '../lib/request-validation';
 
 interface OrganizationRequestsViewProps {
+  readOnly?: boolean;
   onSelectListing: (listingId: string) => void;
   onBrowseListings: () => void;
 }
@@ -58,6 +59,7 @@ const colors = {
 };
 
 export function OrganizationRequestsView({
+  readOnly = false,
   onSelectListing,
   onBrowseListings,
 }: OrganizationRequestsViewProps) {
@@ -165,6 +167,7 @@ export function OrganizationRequestsView({
   const handleWithdraw = (listingId: string) => {
     if (
       !currentUid ||
+      readOnly ||
       page?.fromCache ||
       page?.hasPendingWrites ||
       !parentConfirmed[listingId] ||
@@ -276,7 +279,11 @@ export function OrganizationRequestsView({
   });
 
   return (
-    <View style={styles.container}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.scrollContent}
+      keyboardShouldPersistTaps="handled"
+    >
       {page?.fromCache && (
         <View style={styles.cachedBanner}>
           <Text style={styles.cachedText}>
@@ -530,6 +537,7 @@ export function OrganizationRequestsView({
                       }}
                       disabled={
                         !!withdrawingId ||
+                        readOnly ||
                         page?.fromCache ||
                         page?.hasPendingWrites ||
                         !parentConfirmed[item.listingId]
@@ -548,7 +556,9 @@ export function OrganizationRequestsView({
           })}
         </View>
       )}
-      <View style={{ flexDirection: 'row', gap: 16, padding: 12 }}>
+      <View
+        style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 16, padding: 12 }}
+      >
         <Pressable
           accessibilityRole="button"
           disabled={cursors.length === 1}
@@ -575,13 +585,16 @@ export function OrganizationRequestsView({
           <Text>Next</Text>
         </Pressable>
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 24,
   },
   listContent: {
     padding: 16,
@@ -734,6 +747,8 @@ const styles = StyleSheet.create({
   },
   cardFooter: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
     justifyContent: 'space-between',
     alignItems: 'center',
     marginTop: 2,

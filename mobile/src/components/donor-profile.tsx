@@ -280,8 +280,7 @@ export function DonorProfile({ user }: { user: User }) {
   const canManage =
     !error &&
     account?.data?.accountStatus === 'active' &&
-    profile?.data?.verificationStatus === 'approved' &&
-    !fromCache;
+    profile?.data?.verificationStatus === 'approved';
 
   if (canManage && profile?.data) {
     return (
@@ -318,6 +317,13 @@ export function DonorProfile({ user }: { user: User }) {
 
         {/* Content Body */}
         <View style={styles.appBody}>
+          {!!fromCache && (
+            <Text accessibilityLiveRegion="polite" style={styles.noticeBanner}>
+              Reconnecting. Your form stays open; saving and donation actions
+              are paused until your account is confirmed.
+            </Text>
+          )}
+          {!!message && <AccountError message={message} />}
           {!!notice && (
             <Text accessibilityLiveRegion="polite" style={styles.noticeBanner}>
               {notice}
@@ -326,6 +332,7 @@ export function DonorProfile({ user }: { user: User }) {
 
           {viewMode === 'create' && (
             <DonorListingForm
+              readOnly={!!fromCache}
               key={editing?.id ?? 'new'}
               initialListing={editing}
               onSuccess={() => {
@@ -338,6 +345,7 @@ export function DonorProfile({ user }: { user: User }) {
 
           {viewMode === 'requests' && selectedListing && (
             <DonorIncomingRequests
+              readOnly={!!fromCache}
               listing={selectedListing}
               onBack={() => setViewMode('feed')}
             />
@@ -345,6 +353,7 @@ export function DonorProfile({ user }: { user: User }) {
 
           {viewMode === 'pickup' && selectedListing && (
             <DonorPickupScreen
+              readOnly={!!fromCache}
               key={selectedListing.id}
               listing={selectedListing}
               onBack={() => setViewMode('feed')}
@@ -353,6 +362,7 @@ export function DonorProfile({ user }: { user: User }) {
 
           {viewMode === 'feed' && (
             <DonorListingsFeed
+              readOnly={!!fromCache}
               onCreatePress={() => {
                 setEditing(undefined);
                 setViewMode('create');

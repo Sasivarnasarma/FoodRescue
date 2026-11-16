@@ -399,26 +399,26 @@ export default function ReviewConsole({ canReview }: { canReview: boolean }) {
         }}
       >
         <StatCard
-          title="Total Registered"
+          title="Profiles on This Page"
           value={queue.status === 'ready' ? stats.total : '—'}
-          subtitle="Profiles in active directory"
+          subtitle="Current directory page, up to 50 profiles"
         />
         <StatCard
-          title="Pending Verification"
+          title="Pending on This Page"
           value={queue.status === 'ready' ? stats.pending : '—'}
-          subtitle="Awaiting administrative review"
+          subtitle="Awaiting review on this page"
           tone={stats.pending > 0 ? 'warning' : 'default'}
         />
         <StatCard
-          title="Approved Partners"
+          title="Approved on This Page"
           value={queue.status === 'ready' ? stats.approved : '—'}
-          subtitle="Verified for food rescue"
+          subtitle="Verified profiles on this page"
           tone="success"
         />
         <StatCard
-          title="Audit Decisions"
+          title="Recent Audit Decisions"
           value={audit.status === 'ready' ? audit.rows.length : '—'}
-          subtitle="Recent logged reviews"
+          subtitle="Up to 50 latest logged reviews"
         />
       </Box>
 
@@ -527,7 +527,7 @@ export default function ReviewConsole({ canReview }: { canReview: boolean }) {
           {/* Search Box */}
           <TextField
             size="small"
-            placeholder="Search organization or UID…"
+            placeholder="Search this page by name or UID…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             sx={{
@@ -552,6 +552,10 @@ export default function ReviewConsole({ canReview }: { canReview: boolean }) {
           />
         </Box>
 
+        <Typography variant="caption" sx={{ display: 'block', px: 2.5, py: 1 }}>
+          Search, status filters and profile counts apply to this page. Use Next
+          to browse more profiles.
+        </Typography>
         <ListState
           list={queue}
           online={online}
@@ -573,6 +577,17 @@ export default function ReviewConsole({ canReview }: { canReview: boolean }) {
                   </TableRow>
                 </TableHead>
                 <TableBody>
+                  {filteredRows.length === 0 && (
+                    <TableRow>
+                      <TableCell
+                        colSpan={5}
+                        sx={{ textAlign: 'center', py: 3 }}
+                      >
+                        No profiles match on this page. Clear the filters or
+                        browse another page.
+                      </TableCell>
+                    </TableRow>
+                  )}
                   {filteredRows.map(({ id, data }) => {
                     const profile: PendingProfile = {
                       uid: id,

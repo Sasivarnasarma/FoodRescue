@@ -20,6 +20,7 @@ import {
 import { getFirebaseClients } from '../lib/firebase';
 
 interface DonorListingsFeedProps {
+  readOnly?: boolean;
   onCreatePress: () => void;
   onEditDraft: (listing: FoodListing) => void;
   onViewRequests?: (listing: FoodListing) => void;
@@ -28,6 +29,7 @@ interface DonorListingsFeedProps {
 }
 
 export function DonorListingsFeed({
+  readOnly = false,
   onCreatePress,
   onEditDraft,
   onViewRequests,
@@ -232,7 +234,11 @@ export function DonorListingsFeed({
             style={styles.cancelActionButton}
             onPress={() => handleCancelListing(item)}
             disabled={
-              !!cancellingId || !page || page.fromCache || page.hasPendingWrites
+              readOnly ||
+              !!cancellingId ||
+              !page ||
+              page.fromCache ||
+              page.hasPendingWrites
             }
           >
             {cancellingId === item.id ? (

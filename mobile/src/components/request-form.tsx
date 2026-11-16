@@ -11,6 +11,7 @@ import { DateTimePickerField } from './date-time-picker-field';
 import type { Coordinates, FoodListing } from '../lib/listings';
 import { submitDonationRequest } from '../lib/requests';
 import { localDateText, parseLocalDate } from '../lib/listing-form-validation';
+import { getQuickPickupTime } from '../lib/donation-ui';
 import {
   validateDepartureLocation,
   validatePickupProposal,
@@ -51,15 +52,13 @@ export function RequestForm({
   const lock = useRef(false);
   // Compute initial proposed pickup time
   const [proposedText, setProposedText] = useState(() => {
-    const now = Date.now();
-    const startMillis = listing.pickupStartsAt?.getTime() ?? now;
-    const deadlineMillis = listing.pickupDeadline?.getTime() ?? now + 3600000;
-
-    const targetMillis = Math.min(
-      Math.floor(deadlineMillis / 60000) * 60000,
-      Math.ceil(Math.max(startMillis, now + 5 * 60000) / 60000) * 60000,
+    return localDateText(
+      getQuickPickupTime(
+        'start',
+        listing.pickupStartsAt,
+        listing.pickupDeadline,
+      ),
     );
-    return localDateText(new Date(targetMillis));
   });
 
   const [confirmedStorage, setConfirmedStorage] = useState(false);
@@ -155,12 +154,38 @@ export function RequestForm({
           editable={!submitting && !submitted && !disabled}
           minDate={listing.pickupStartsAt ?? new Date()}
           maxDate={listing.pickupDeadline ?? undefined}
-          presets={[
-            { label: 'At Window Start', offsetMinutes: 5 },
-            { label: 'Mid Window', offsetMinutes: 60 },
-            { label: '30m Before End', offsetMinutes: 120 },
-          ]}
         />
+        <View style={styles.quickButtonsRow}>
+          {(['start', 'mid', 'beforeDeadline'] as const).map(
+            (shortcut, index) => (
+              <Pressable
+                key={shortcut}
+                accessibilityRole="button"
+                disabled={submitting || submitted || disabled}
+                style={styles.quickButton}
+                onPress={() => {
+                  const chosen = getQuickPickupTime(
+                    shortcut,
+                    listing.pickupStartsAt,
+                    listing.pickupDeadline,
+                  );
+                  if (!chosen) {
+                    setErrorMessage(
+                      'No future minute is available in this pickup window.',
+                    );
+                    return;
+                  }
+                  setProposedText(localDateText(chosen));
+                  setErrorMessage('');
+                }}
+              >
+                <Text style={styles.quickButtonText}>
+                  {['At Window Start', 'Mid Window', '30m Before End'][index]}
+                </Text>
+              </Pressable>
+            ),
+          )}
+        </View>
         <Text style={styles.hint}>
           Allowed window: {localDateText(listing.pickupStartsAt)} to{' '}
           {localDateText(listing.pickupDeadline)} (local time)
@@ -296,10 +321,13 @@ const styles = StyleSheet.create({
   },
   quickButtonsRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
     marginTop: 4,
   },
   quickButton: {
+    maxWidth: '100%',
+    flexShrink: 1,
     paddingHorizontal: 10,
     paddingVertical: 6,
     backgroundColor: colors.surfaceSubtle,

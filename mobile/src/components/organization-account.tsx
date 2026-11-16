@@ -42,26 +42,6 @@ const palette = {
   redText: '#B91C1C',
 };
 
-const statusContent = {
-  pending: {
-    title: 'Awaiting verification',
-    message:
-      'An admin will review your organization profile. You can check their decision here.',
-    tone: 'warning',
-  },
-  approved: {
-    title: 'Organization approved',
-    message: 'Your organization is verified and eligible to request donations.',
-    tone: 'success',
-  },
-  rejected: {
-    title: 'Organization not approved',
-    message:
-      'Contact the FoodRescue project team for help with your application.',
-    tone: 'error',
-  },
-} as const;
-
 function readableError(error: unknown, fallback: string) {
   const code =
     error && typeof error === 'object' && 'code' in error ? error.code : null;
@@ -351,7 +331,7 @@ export function ProfileStatus({ uid, user }: { uid: string; user?: User }) {
     );
   }
 
-  if (result.state === 'approved' && result.confirmed) {
+  if (result.state === 'approved') {
     return (
       <View style={styles.appShell}>
         {/* Modern Top App Bar */}
@@ -388,11 +368,26 @@ export function ProfileStatus({ uid, user }: { uid: string; user?: User }) {
 
         {/* Content Body */}
         <View style={styles.appBody}>
+          {!result.confirmed && (
+            <Message tone="warning">
+              Reconnecting. Showing saved details; donation actions are paused
+              until your account is confirmed.
+            </Message>
+          )}
+          {signOutError ? <Message tone="error">{signOutError}</Message> : null}
           {recipientTab === 'feed' && (
-            <RecipientFeed initialTab="feed" key="feed" />
+            <RecipientFeed
+              readOnly={!result.confirmed}
+              initialTab="feed"
+              key="feed"
+            />
           )}
           {recipientTab === 'requests' && (
-            <RecipientFeed initialTab="requests" key="requests" />
+            <RecipientFeed
+              readOnly={!result.confirmed}
+              initialTab="requests"
+              key="requests"
+            />
           )}
           {recipientTab === 'profile' && (
             <ScrollView contentContainerStyle={styles.profileTabContent}>
@@ -575,21 +570,7 @@ export function ProfileStatus({ uid, user }: { uid: string; user?: User }) {
     );
   }
 
-  const status = statusContent[result.state];
-  return (
-    <View style={styles.card}>
-      <Text style={styles.body}>{result.name}</Text>
-      <Text accessibilityRole="header" style={styles.heading}>
-        {status.title}
-      </Text>
-      <Message tone={status.tone}>{status.message}</Message>
-      {!result.confirmed ? (
-        <Message tone="warning">
-          Showing a saved status while we reconnect. It may have changed.
-        </Message>
-      ) : null}
-    </View>
-  );
+  return null;
 }
 
 function SignedIn({ user }: { user: User }) {

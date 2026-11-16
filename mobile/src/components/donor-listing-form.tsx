@@ -34,11 +34,13 @@ import {
   type Coordinates,
 } from '../lib/listings';
 interface Props {
+  readOnly?: boolean;
   initialListing?: FoodListing;
   onSuccess: () => void;
   onCancel: () => void;
 }
 export function DonorListingForm({
+  readOnly = false,
   initialListing: initial,
   onSuccess,
   onCancel,
@@ -76,6 +78,7 @@ export function DonorListingForm({
   const [useBy, setUseBy] = useState(localDateText(initial?.useByAt));
   const [photo, setPhoto] = useState<CompressedPhotoResult | null>(null);
   const [photoChanged, setPhotoChanged] = useState(false);
+  const [photoProcessing, setPhotoProcessing] = useState(false);
   const [photoLoading, setPhotoLoading] = useState(!!initial);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -109,7 +112,7 @@ export function DonorListingForm({
     };
   }, [initial]);
   async function save(publish: boolean) {
-    if (locked.current) return;
+    if (locked.current || readOnly || photoProcessing || photoLoading) return;
     locked.current = true;
     setError('');
     try {
@@ -386,6 +389,7 @@ export function DonorListingForm({
           <ActivityIndicator accessibilityLabel="Loading photo" />
         ) : (
           <PhotoAttachmentCard
+            onProcessingChange={setPhotoProcessing}
             embedded
             photo={photo}
             onPhotoSelected={(value) => {
@@ -400,13 +404,13 @@ export function DonorListingForm({
       <View style={styles.actionGroup}>
         <AccountButton
           label={busy ? 'Publishing…' : 'Publish donation'}
-          disabled={busy || photoLoading}
+          disabled={busy || photoLoading || photoProcessing || readOnly}
           onPress={() => void save(true)}
         />
         <AccountButton
           label={busy ? 'Saving…' : 'Save draft'}
           secondary
-          disabled={busy || photoLoading}
+          disabled={busy || photoLoading || photoProcessing || readOnly}
           onPress={() => void save(false)}
         />
         <AccountButton

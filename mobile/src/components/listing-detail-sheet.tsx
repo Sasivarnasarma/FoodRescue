@@ -148,7 +148,11 @@ export function ListingDetailSheet({
   );
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      keyboardShouldPersistTaps="handled"
+    >
       <TouchableOpacity
         accessibilityRole="button"
         style={styles.backButton}
