@@ -1,6 +1,6 @@
 # Phase 4 pickup rules and shared helpers
 
-Member 3 implements the shared data operations and rules. Donor/recipient pickup screens, QR display/scanning, manual reference entry, reminders and admin/demo integration remain the other members' tasks.
+Members 1, 2, 3 and 5 provide donor and recipient pickup screens, shared data operations and rules, QR scanning/display, manual references and foreground reminders. Member 4 admin/demo integration and physical-device acceptance remain pending.
 
 ## Pickup contract
 
@@ -94,3 +94,7 @@ Combined review verification: 63 mobile tests and 44 rules tests pass, together 
 ## Recipient pickup integration
 
 Recipient pickup details include the shared QR reference, signed-in confirmation/retraction, expiry reconciliation, release/cancellation and own collection receipts. Request-history filters operate on the current bounded page. Native two-phone acceptance is pending.
+
+Recipient PR review: pickup uses the shared real QR generator and preserves the original case-sensitive listing ID as the manual reference. Confirmation and expiry actions require the matching selected organization, valid pickup timing and confirmed server metadata; pending writes block actions and duplicate mutations are serialized. Collection receipts/history require both the matching request and parent listing to be collected for the current organization. A donation collected by another organization is labelled accordingly and is excluded from own collection history. Invalid windows and stale/future confirmations do not enable handover.
+
+Latest recipient integration checks: 71 mobile tests and 44 rules tests, mobile lint, formatting, TypeScript and Android bundling pass. Physical camera scanning, two-phone confirmation/collection and background/foreground behavior remain manual acceptance steps.

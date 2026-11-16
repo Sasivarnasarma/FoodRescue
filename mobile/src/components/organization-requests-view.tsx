@@ -21,7 +21,12 @@ import {
   withdrawDonationRequest,
   type DonationRequest,
 } from '../lib/requests';
-import { deriveRequestState, formatDateText } from '../lib/request-validation';
+import {
+  deriveRequestState,
+  formatDateText,
+  isRecipientAssignment,
+  isRecipientCollection,
+} from '../lib/request-validation';
 
 interface OrganizationRequestsViewProps {
   onSelectListing: (listingId: string) => void;
@@ -245,22 +250,20 @@ export function OrganizationRequestsView({
   const isRequestPickup = (item: DonationRequest) => {
     const listing = listingsMap[item.listingId];
     return (
-      (item.status === 'approved' ||
-        (listing?.status === 'assigned' &&
-          listing?.acceptedOrganizationUid === currentUid)) &&
-      item.status !== 'collected' &&
-      listing?.status !== 'collected'
+      isRecipientAssignment(listing, item, currentUid ?? '') &&
+      !!listing.pickupDeadline &&
+      listing.pickupDeadline.getTime() > now.getTime()
     );
   };
-
-  const isRequestCollected = (item: DonationRequest) => {
-    const listing = listingsMap[item.listingId];
-    return item.status === 'collected' || listing?.status === 'collected';
-  };
-
+  const isRequestCollected = (item: DonationRequest) =>
+    isRecipientCollection(listingsMap[item.listingId], item, currentUid ?? '');
   const isRequestPending = (item: DonationRequest) =>
-    item.status === 'requested';
-
+    deriveRequestState(
+      item,
+      listingsMap[item.listingId] ?? null,
+      currentUid ?? '',
+      now,
+    ).status === 'pending';
   const pickupsCount = requests.filter(isRequestPickup).length;
   const pendingCount = requests.filter(isRequestPending).length;
   const collectedCount = requests.filter(isRequestCollected).length;
@@ -282,6 +285,7 @@ export function OrganizationRequestsView({
         </View>
       )}
 
+      <Text>Filters and counts apply to the current page.</Text>
       {/* Filter Tabs / Segmented Pills */}
       <View style={styles.filterBarContainer}>
         <ScrollView

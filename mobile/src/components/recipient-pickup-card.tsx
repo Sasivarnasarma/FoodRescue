@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -20,10 +20,12 @@ import {
   formatDateText,
   formatSecondsCountdown,
   formatTimeSpan,
-  getPickupQrPayload,
+  isRecipientAssignment,
+  isRecipientCollection,
+  deriveRequestState,
   getRecipientPickupTiming,
 } from '../lib/request-validation';
-import { QrCodeView } from './qr-code-view';
+import { QrDisplayCard } from './qr-display-card';
 
 interface RecipientPickupCardProps {
   listing: FoodListing;
@@ -62,15 +64,21 @@ export function RecipientPickupCard({
   hasPendingWrites = false,
   onStatusChange,
 }: RecipientPickupCardProps) {
+  const mutationLock = useRef(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
   const now = useCurrentTime();
   const timing = getRecipientPickupTiming(listing, request, now);
-  const qrPayload = getPickupQrPayload(listing.id);
+  const ownAssignment = isRecipientAssignment(listing, request, currentUid);
+  const beginMutation = () => {
+    if (mutationLock.current) return false;
+    mutationLock.current = true;
+    setSubmitting(true);
+    return true;
+  };
 
-  const isCollected =
-    listing.status === 'collected' || request.status === 'collected';
+  const isCollected = isRecipientCollection(listing, request, currentUid);
   const isCancelled =
     listing.status === 'cancelled' || request.status === 'cancelled';
   const isExpired =
@@ -78,8 +86,16 @@ export function RecipientPickupCard({
 
   // 1. Confirm Handover Action
   const handleConfirmHandover = async () => {
-    if (submitting || isOffline || hasPendingWrites) return;
-    setSubmitting(true);
+    if (!timing.canConfirmHandover) return;
+    if (
+      mutationLock.current ||
+      submitting ||
+      isOffline ||
+      hasPendingWrites ||
+      !ownAssignment
+    )
+      return;
+    if (!beginMutation()) return;
     setErrorMessage('');
     try {
       await confirmPickupHandover(listing.id, currentUid);
@@ -91,14 +107,22 @@ export function RecipientPickupCard({
           : 'Could not confirm handover. Please try again.',
       );
     } finally {
+      mutationLock.current = false;
       setSubmitting(false);
     }
   };
 
   // 2. Clear / Retract Handover Confirmation
   const handleClearHandover = async () => {
-    if (submitting || isOffline || hasPendingWrites) return;
-    setSubmitting(true);
+    if (
+      mutationLock.current ||
+      submitting ||
+      isOffline ||
+      hasPendingWrites ||
+      !ownAssignment
+    )
+      return;
+    if (!beginMutation()) return;
     setErrorMessage('');
     try {
       await clearPickupHandover(listing.id, currentUid);
@@ -108,13 +132,22 @@ export function RecipientPickupCard({
         err instanceof Error ? err.message : 'Could not retract confirmation.',
       );
     } finally {
+      mutationLock.current = false;
       setSubmitting(false);
     }
   };
 
   // 3. Cancel / Release Assignment
   const handleCancelAssignment = () => {
-    if (submitting || isOffline || hasPendingWrites) return;
+    if (timing.windowStatus === 'elapsed') return;
+    if (
+      mutationLock.current ||
+      submitting ||
+      isOffline ||
+      hasPendingWrites ||
+      !ownAssignment
+    )
+      return;
 
     const willReopen = timing.cancellationEffect === 'open';
     const alertMessage = willReopen
@@ -130,7 +163,7 @@ export function RecipientPickupCard({
           text: willReopen ? 'Release & Reopen' : 'Cancel Listing',
           style: 'destructive',
           onPress: async () => {
-            setSubmitting(true);
+            if (!beginMutation()) return;
             setErrorMessage('');
             try {
               await cancelApprovedDonation(listing.id, currentUid, 'release');
@@ -142,6 +175,7 @@ export function RecipientPickupCard({
                   : 'Could not release assignment.',
               );
             } finally {
+              mutationLock.current = false;
               setSubmitting(false);
             }
           },
@@ -152,8 +186,16 @@ export function RecipientPickupCard({
 
   // 4. Reconcile Expired Donation
   const handleReconcileExpiry = async () => {
-    if (submitting || isOffline || hasPendingWrites) return;
-    setSubmitting(true);
+    if (!timing.canReconcileExpiry) return;
+    if (
+      mutationLock.current ||
+      submitting ||
+      isOffline ||
+      hasPendingWrites ||
+      !ownAssignment
+    )
+      return;
+    if (!beginMutation()) return;
     setErrorMessage('');
     try {
       await reconcileExpiredListing(listing.id);
@@ -163,6 +205,7 @@ export function RecipientPickupCard({
         err instanceof Error ? err.message : 'Could not reconcile expiry.',
       );
     } finally {
+      mutationLock.current = false;
       setSubmitting(false);
     }
   };
@@ -171,6 +214,9 @@ export function RecipientPickupCard({
   if (isCollected) {
     return (
       <View style={[styles.card, styles.collectedCard]}>
+        {isOffline || hasPendingWrites ? (
+          <Text>Saved receipt may be out of date. Reconnecting…</Text>
+        ) : null}
         <View style={styles.badgeCollected}>
           <Text style={styles.badgeCollectedText}>Donation Collected</Text>
         </View>
@@ -238,8 +284,9 @@ export function RecipientPickupCard({
           This assignment was cancelled.
         </Text>
         <Text style={styles.cancelledText}>
-          The assignment has been released or closed. Requests on this listing
-          are no longer active.
+          Your assignment was released or closed and this request cannot be
+          resubmitted. Other requests may remain eligible if the listing
+          reopened.
         </Text>
       </View>
     );
@@ -263,6 +310,15 @@ export function RecipientPickupCard({
     );
   }
 
+  if (!ownAssignment) {
+    return (
+      <View style={styles.card}>
+        <Text>
+          {deriveRequestState(request, listing, currentUid, now).description}
+        </Text>
+      </View>
+    );
+  }
   return (
     <View style={styles.card}>
       {/* Offline / Pending Banner */}
@@ -326,10 +382,12 @@ export function RecipientPickupCard({
       )}
 
       {/* Visual QR Code Reference */}
-      <QrCodeView
-        reference={qrPayload.reference}
-        rawPayload={qrPayload.raw}
-        size={190}
+      <QrDisplayCard
+        listingId={listing.id}
+        listingTitle={listing.title}
+        pickupStartsAt={listing.pickupStartsAt}
+        pickupDeadline={listing.pickupDeadline}
+        recipientConfirmedAt={request.recipientConfirmedAt}
       />
 
       {/* Handover Confirmation Interaction */}
@@ -359,12 +417,15 @@ export function RecipientPickupCard({
 
             <Pressable
               accessibilityRole="button"
-              accessibilityState={{ disabled: submitting || isOffline }}
-              disabled={submitting || isOffline}
+              accessibilityState={{
+                disabled: submitting || isOffline || hasPendingWrites,
+              }}
+              disabled={submitting || isOffline || hasPendingWrites}
               style={({ pressed }) => [
                 styles.retractButton,
                 pressed && styles.buttonPressed,
-                (submitting || isOffline) && styles.buttonDisabled,
+                (submitting || isOffline || hasPendingWrites) &&
+                  styles.buttonDisabled,
               ]}
               onPress={handleClearHandover}
             >
@@ -377,21 +438,33 @@ export function RecipientPickupCard({
           <View style={styles.staleBox}>
             <Text style={styles.staleTitle}>Confirmation Window Expired</Text>
             <Text style={styles.staleText}>
-              More than 5 minutes have passed since your previous confirmation,
-              and the donor has not completed collection. Please confirm
-              handover again when ready.
+              Your previous confirmation is no longer valid, and the donor has
+              not completed collection. Please confirm handover again when
+              ready.
             </Text>
 
             <Pressable
               accessibilityRole="button"
               accessibilityState={{
-                disabled: submitting || isOffline || !timing.canConfirmHandover,
+                disabled:
+                  submitting ||
+                  isOffline ||
+                  hasPendingWrites ||
+                  !timing.canConfirmHandover,
               }}
-              disabled={submitting || isOffline || !timing.canConfirmHandover}
+              disabled={
+                submitting ||
+                isOffline ||
+                hasPendingWrites ||
+                !timing.canConfirmHandover
+              }
               style={({ pressed }) => [
                 styles.primaryButton,
                 pressed && styles.buttonPressed,
-                (submitting || isOffline || !timing.canConfirmHandover) &&
+                (submitting ||
+                  isOffline ||
+                  hasPendingWrites ||
+                  !timing.canConfirmHandover) &&
                   styles.buttonDisabled,
               ]}
               onPress={handleConfirmHandover}
@@ -411,13 +484,25 @@ export function RecipientPickupCard({
             <Pressable
               accessibilityRole="button"
               accessibilityState={{
-                disabled: submitting || isOffline || !timing.canConfirmHandover,
+                disabled:
+                  submitting ||
+                  isOffline ||
+                  hasPendingWrites ||
+                  !timing.canConfirmHandover,
               }}
-              disabled={submitting || isOffline || !timing.canConfirmHandover}
+              disabled={
+                submitting ||
+                isOffline ||
+                hasPendingWrites ||
+                !timing.canConfirmHandover
+              }
               style={({ pressed }) => [
                 styles.primaryButton,
                 pressed && styles.buttonPressed,
-                (submitting || isOffline || !timing.canConfirmHandover) &&
+                (submitting ||
+                  isOffline ||
+                  hasPendingWrites ||
+                  !timing.canConfirmHandover) &&
                   styles.buttonDisabled,
               ]}
               onPress={handleConfirmHandover}
@@ -441,6 +526,16 @@ export function RecipientPickupCard({
         )}
       </View>
 
+      {request.recipientConfirmedAt &&
+      timing.confirmationStatus !== 'confirmed_valid' ? (
+        <Pressable
+          accessibilityRole="button"
+          disabled={submitting || isOffline || hasPendingWrites}
+          onPress={handleClearHandover}
+        >
+          <Text>Clear previous confirmation</Text>
+        </Pressable>
+      ) : null}
       {/* Error Feedback */}
       {errorMessage ? (
         <View style={styles.errorBox}>
@@ -453,12 +548,15 @@ export function RecipientPickupCard({
         {timing.canReconcileExpiry ? (
           <Pressable
             accessibilityRole="button"
-            accessibilityState={{ disabled: submitting || isOffline }}
-            disabled={submitting || isOffline}
+            accessibilityState={{
+              disabled: submitting || isOffline || hasPendingWrites,
+            }}
+            disabled={submitting || isOffline || hasPendingWrites}
             style={({ pressed }) => [
               styles.reconcileButton,
               pressed && styles.buttonPressed,
-              (submitting || isOffline) && styles.buttonDisabled,
+              (submitting || isOffline || hasPendingWrites) &&
+                styles.buttonDisabled,
             ]}
             onPress={handleReconcileExpiry}
           >
@@ -469,12 +567,15 @@ export function RecipientPickupCard({
         ) : (
           <Pressable
             accessibilityRole="button"
-            accessibilityState={{ disabled: submitting || isOffline }}
-            disabled={submitting || isOffline}
+            accessibilityState={{
+              disabled: submitting || isOffline || hasPendingWrites,
+            }}
+            disabled={submitting || isOffline || hasPendingWrites}
             style={({ pressed }) => [
               styles.releaseButton,
               pressed && styles.buttonPressed,
-              (submitting || isOffline) && styles.buttonDisabled,
+              (submitting || isOffline || hasPendingWrites) &&
+                styles.buttonDisabled,
             ]}
             onPress={handleCancelAssignment}
           >

@@ -1,19 +1,30 @@
+import {
+  encodePickupQrPayload,
+  parsePickupReference,
+} from '../src/lib/qr-service.ts';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   formatSecondsCountdown,
   formatTimeSpan,
-  getPickupQrPayload,
+  isRecipientAssignment,
+  isRecipientCollection,
+  deriveRequestState,
   getRecipientPickupTiming,
 } from '../src/lib/request-validation.ts';
 
-test('getPickupQrPayload creates standard opaque reference without sensitive user data', () => {
-  const listingId = 'listing-123-abc';
-  const payload = getPickupQrPayload(listingId);
+test('recipient QR payload round trips through the shared donor parser', () => {
+  const listingId = 'listing-AbC-123';
+  const payload = {
+    version: 1,
+    reference: listingId,
+    raw: encodePickupQrPayload(listingId),
+  };
 
   assert.equal(payload.version, 1);
-  assert.equal(payload.reference, 'FR-LISTING-123-ABC');
-  assert.equal(payload.raw, 'foodrescue:pickup:v1:listing-123-abc');
+  assert.equal(payload.reference, listingId);
+  assert.equal(parsePickupReference(payload.raw).listingId, listingId);
+  assert.equal(parsePickupReference(payload.reference).listingId, listingId);
   // Does not embed sensitive tokens, passwords, or personal details
   assert.ok(!payload.raw.includes('bearer'));
   assert.ok(!payload.raw.includes('token'));
@@ -36,6 +47,7 @@ test('getRecipientPickupTiming detects before_start, active, and elapsed window 
     allergenDeclaration: 'provided',
     pickupAddress: '123 Baker St',
     status: 'assigned',
+    acceptedOrganizationUid: 'org1',
     pickupStartsAt: new Date('2026-11-16T14:00:00Z'),
     pickupDeadline: new Date('2026-11-16T16:00:00Z'),
   };
@@ -113,6 +125,7 @@ test('getRecipientPickupTiming manages the 5-minute handover confirmation countd
     allergenDeclaration: 'provided',
     pickupAddress: '123 Baker St',
     status: 'assigned',
+    acceptedOrganizationUid: 'org1',
     pickupStartsAt: new Date('2026-11-16T14:00:00Z'),
     pickupDeadline: new Date('2026-11-16T16:00:00Z'),
   };
@@ -184,4 +197,122 @@ test('formatTimeSpan formats spans across minutes and hours', () => {
   assert.equal(formatTimeSpan(150 * 60), '2h 30m');
   assert.equal(formatTimeSpan(0), '0s');
   assert.equal(formatTimeSpan(-5), '0s');
+});
+
+test('recipient history excludes collections received by a different organization', () => {
+  const listing = {
+    id: 'l1',
+    providerUid: 'donor1',
+    status: 'collected',
+    acceptedOrganizationUid: 'winner',
+  };
+  const loser = {
+    listingId: 'l1',
+    providerUid: 'donor1',
+    organizationUid: 'loser',
+    status: 'requested',
+  };
+  const winner = { ...loser, organizationUid: 'winner', status: 'collected' };
+  assert.equal(isRecipientCollection(listing, loser, 'loser'), false);
+  assert.equal(isRecipientCollection(listing, winner, 'winner'), true);
+  assert.equal(
+    isRecipientCollection(listing, { ...winner, status: 'approved' }, 'winner'),
+    false,
+  );
+  assert.equal(
+    deriveRequestState(loser, listing, 'loser').status,
+    'assigned_to_other',
+  );
+  assert.equal(
+    isRecipientAssignment(
+      { ...listing, status: 'assigned' },
+      { ...winner, status: 'approved' },
+      'loser',
+    ),
+    false,
+  );
+});
+
+test('recipient timing fails closed for missing windows and wrong assignments', () => {
+  const listing = {
+    id: 'l1',
+    providerUid: 'donor',
+    status: 'assigned',
+    acceptedOrganizationUid: 'org',
+    pickupStartsAt: new Date(0),
+    pickupDeadline: new Date(2_000_000),
+  };
+  const request = {
+    listingId: 'l1',
+    providerUid: 'donor',
+    organizationUid: 'org',
+    status: 'approved',
+    recipientConfirmedAt: new Date(500_000),
+  };
+  const now = new Date(600_000);
+  assert.equal(
+    getRecipientPickupTiming(listing, request, now).canConfirmHandover,
+    true,
+  );
+  assert.equal(
+    getRecipientPickupTiming(
+      { ...listing, pickupStartsAt: undefined },
+      request,
+      now,
+    ).canConfirmHandover,
+    false,
+  );
+  assert.equal(
+    getRecipientPickupTiming(
+      listing,
+      { ...request, organizationUid: 'other' },
+      now,
+    ).canConfirmHandover,
+    false,
+  );
+  assert.equal(
+    getRecipientPickupTiming(
+      { ...listing, status: 'open' },
+      request,
+      new Date(2_000_000),
+    ).canReconcileExpiry,
+    false,
+  );
+  assert.equal(
+    getRecipientPickupTiming(listing, request, new Date(2_000_000))
+      .canReconcileExpiry,
+    true,
+  );
+});
+
+test('recipient confirmation is invalid outside the pickup window', () => {
+  const listing = {
+    id: 'l1',
+    providerUid: 'donor',
+    status: 'assigned',
+    acceptedOrganizationUid: 'org',
+    pickupStartsAt: new Date(100_000),
+    pickupDeadline: new Date(500_000),
+  };
+  const request = {
+    listingId: 'l1',
+    providerUid: 'donor',
+    organizationUid: 'org',
+    status: 'approved',
+    recipientConfirmedAt: new Date(400_000),
+  };
+  assert.equal(
+    getRecipientPickupTiming(listing, request, new Date(500_000))
+      .confirmationStatus,
+    'confirmed_stale',
+  );
+  assert.equal(
+    getRecipientPickupTiming(
+      listing,
+      { ...request, recipientConfirmedAt: new Date(99_999) },
+      new Date(200_000),
+    ).confirmationStatus,
+    'confirmed_stale',
+  );
+  assert.equal(formatSecondsCountdown(NaN), '0:00');
 });
