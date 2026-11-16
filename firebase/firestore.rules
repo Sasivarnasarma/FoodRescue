@@ -49,6 +49,34 @@ service cloud.firestore {
         && get(profilePath(uid)).data.verificationStatus == 'approved';
     }
 
+    function validPickupCollection(listing, candidate) {
+      return request.time >= listing.pickupStartsAt
+        && request.time < listing.pickupDeadline
+        && candidate.recipientConfirmedAt is timestamp
+        && candidate.recipientConfirmedAt >= listing.pickupStartsAt
+        && candidate.recipientConfirmedAt <= request.time
+        && request.time <= candidate.recipientConfirmedAt + duration.value(5, 'm')
+        && isEligibleOrganization(listing.acceptedOrganizationUid);
+    }
+
+    function isSelectedAssignment(listingId, organizationUid) {
+      return get(listingPath(listingId)).data.status == 'assigned'
+        && get(listingPath(listingId)).data.acceptedOrganizationUid == organizationUid;
+    }
+    function isListingProvider(listing) {
+      return request.auth != null && listing.providerUid == request.auth.uid
+        && isApprovedProvider(request.auth.uid);
+    }
+
+    function isAssignedRecipient(listing) {
+      return request.auth != null && listing.status == 'assigned'
+        && listing.acceptedOrganizationUid == request.auth.uid
+        && isApprovedOrganization(request.auth.uid);
+    }
+
+    function canReconcileListing(listing) {
+      return isAdmin() || isListingProvider(listing) || isAssignedRecipient(listing);
+    }
     function exactFields(data, fields) {
       return data.keys().hasAll(fields) && data.keys().hasOnly(fields);
     }
@@ -185,46 +213,85 @@ service cloud.firestore {
             && validListingDetails(request.resource.data))
         );
 
-      allow update: if isApprovedProvider(request.auth.uid)
-        && resource.data.providerUid == request.auth.uid
-        && request.resource.data.providerUid == resource.data.providerUid
+      function selectedRequestAfter(status, clearConfirmation) {
+        let selected = requestPath(listingId, resource.data.acceptedOrganizationUid);
+        let before = get(selected).data;
+        let after = getAfter(selected).data;
+        return before.status == 'approved' && after.status == status
+          && after.updatedAt == request.time
+          && (!clearConfirmation || !('recipientConfirmedAt' in after));
+      }
+
+      function validDraftTransition() {
+        return isListingProvider(resource.data)
+          && !('acceptedOrganizationUid' in request.resource.data)
+          && !('collectedAt' in request.resource.data)
+          && (request.resource.data.status == 'draft'
+            ? validText(request.resource.data.title, 120)
+            : request.resource.data.status == 'open' && validListingDetails(request.resource.data));
+      }
+
+      function validAssignment() {
+        let uid = request.resource.data.acceptedOrganizationUid;
+        let before = get(requestPath(listingId, uid)).data;
+        let after = getAfter(requestPath(listingId, uid)).data;
+        return isListingProvider(resource.data) && uid is string
+          && isEligibleOrganization(uid)
+          && request.time + duration.value(15, 'm') <= resource.data.pickupDeadline
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'acceptedOrganizationUid', 'updatedAt'])
+          && before.status == 'requested' && before.canMeetStorageRequirement == true
+          && before.plannedPickupAt >= request.time
+          && before.plannedPickupAt >= resource.data.pickupStartsAt
+          && before.plannedPickupAt <= resource.data.pickupDeadline
+          && after.status == 'approved' && after.updatedAt == request.time;
+      }
+
+      function validCollection() {
+        return isListingProvider(resource.data)
+          && request.resource.data.collectedAt == request.time
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'collectedAt', 'updatedAt'])
+          && validPickupCollection(resource.data, get(requestPath(listingId, resource.data.acceptedOrganizationUid)).data)
+          && selectedRequestAfter('collected', false);
+      }
+
+      function validAssignmentCancellation(reopen) {
+        return !('acceptedOrganizationUid' in request.resource.data)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'acceptedOrganizationUid', 'updatedAt'])
+          && (reopen
+            ? request.time + duration.value(15, 'm') <= resource.data.pickupDeadline
+              && (isListingProvider(resource.data) || isAssignedRecipient(resource.data))
+            : request.time < resource.data.pickupDeadline
+              && (isListingProvider(resource.data)
+                || (isAssignedRecipient(resource.data) && request.time + duration.value(15, 'm') > resource.data.pickupDeadline)))
+          && selectedRequestAfter('cancelled', true);
+      }
+
+      function validExpiry(assigned) {
+        return request.time >= resource.data.pickupDeadline && canReconcileListing(resource.data)
+          && (assigned
+            ? !('acceptedOrganizationUid' in request.resource.data)
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'acceptedOrganizationUid', 'updatedAt'])
+              && selectedRequestAfter('expired', true)
+            : request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']));
+      }
+
+      allow update: if request.resource.data.providerUid == resource.data.providerUid
         && request.resource.data.providerName == resource.data.providerName
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.updatedAt == request.time
         && validListingKeys(request.resource.data)
-        && (
-          (resource.data.status == 'draft'
-            && !('acceptedOrganizationUid' in request.resource.data)
-            && !('collectedAt' in request.resource.data)
-            && (
-              (request.resource.data.status == 'draft'
-                && validText(request.resource.data.title, 120))
-              ||
-              (request.resource.data.status == 'open'
-                && request.resource.data.keys().hasAll(['providerUid', 'providerName', 'title', 'description', 'category', 'quantity', 'unit', 'storageRequirement', 'storageInstructions', 'allergenInfo', 'allergenDeclaration', 'pickupAddress', 'pickupLocation', 'pickupStartsAt', 'pickupDeadline', 'status', 'createdAt', 'updatedAt'])
-                && validListingDetails(request.resource.data))
-            ))
-          ||
-          (resource.data.status == 'open'
-            && request.resource.data.status == 'cancelled'
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']))
-          ||
-          (resource.data.status == 'open'
-            && request.resource.data.status == 'assigned'
-            && request.time + duration.value(15, 'm') <= resource.data.pickupDeadline
-            && request.resource.data.acceptedOrganizationUid is string
-            && isEligibleOrganization(request.resource.data.acceptedOrganizationUid)
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'acceptedOrganizationUid', 'updatedAt'])
-            && exists(requestPath(listingId, request.resource.data.acceptedOrganizationUid))
-            && get(requestPath(listingId, request.resource.data.acceptedOrganizationUid)).data.status == 'requested'
-            && get(requestPath(listingId, request.resource.data.acceptedOrganizationUid)).data.canMeetStorageRequirement == true
-            && get(requestPath(listingId, request.resource.data.acceptedOrganizationUid)).data.plannedPickupAt >= request.time
-            && get(requestPath(listingId, request.resource.data.acceptedOrganizationUid)).data.plannedPickupAt >= resource.data.pickupStartsAt
-            && get(requestPath(listingId, request.resource.data.acceptedOrganizationUid)).data.plannedPickupAt <= resource.data.pickupDeadline
-            && getAfter(requestPath(listingId, request.resource.data.acceptedOrganizationUid)).data.status == 'approved'
-            && getAfter(requestPath(listingId, request.resource.data.acceptedOrganizationUid)).data.updatedAt == request.time)
-        );
-
+        && (resource.data.status == 'draft' ? validDraftTransition()
+          : resource.data.status == 'open'
+            ? (request.resource.data.status == 'assigned' ? validAssignment()
+              : request.resource.data.status == 'cancelled'
+                ? isListingProvider(resource.data) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])
+                : request.resource.data.status == 'expired' && validExpiry(false))
+            : resource.data.status == 'assigned'
+              ? (request.resource.data.status == 'collected' ? validCollection()
+                : request.resource.data.status == 'open' ? validAssignmentCancellation(true)
+                : request.resource.data.status == 'cancelled' ? validAssignmentCancellation(false)
+                : request.resource.data.status == 'expired' && validExpiry(true))
+              : false);
       allow delete: if isApprovedProvider(request.auth.uid)
         && resource.data.providerUid == request.auth.uid
         && resource.data.status == 'draft';
@@ -292,32 +359,65 @@ service cloud.firestore {
           ])
           && (!('departureLocation' in request.resource.data) || request.resource.data.departureLocation is latlng);
 
-        allow update: if (
-          // Withdrawal by organization
-          isApprovedOrganization(request.auth.uid)
-          && organizationUid == request.auth.uid
-          && resource.data.organizationUid == request.auth.uid
-          && resource.data.status == 'requested'
-          && request.resource.data.status == 'withdrawn'
-          && request.resource.data.updatedAt == request.time
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])
-        ) || (
-          // Approval by owning provider
-          isEligibleOrganization(organizationUid)
-          && isApprovedProvider(request.auth.uid)
-          && exists(listingPath(listingId))
-          && get(listingPath(listingId)).data.providerUid == request.auth.uid
-          && request.time + duration.value(15, 'm') <= get(listingPath(listingId)).data.pickupDeadline
-          && resource.data.status == 'requested'
-          && request.resource.data.status == 'approved'
-          && request.resource.data.updatedAt == request.time
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])
-          && get(listingPath(listingId)).data.status == 'open'
-          && getAfter(listingPath(listingId)).data.status == 'assigned'
-          && getAfter(listingPath(listingId)).data.acceptedOrganizationUid == organizationUid
-          && getAfter(listingPath(listingId)).data.updatedAt == request.time
-        );
+        function validWithdrawal() {
+          return isApprovedOrganization(request.auth.uid) && organizationUid == request.auth.uid
+            && resource.data.organizationUid == request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']);
+        }
 
+        function validApproval() {
+          let listing = get(listingPath(listingId)).data;
+          let after = getAfter(listingPath(listingId)).data;
+          return isListingProvider(listing) && isEligibleOrganization(organizationUid)
+            && listing.status == 'open'
+            && request.time + duration.value(15, 'm') <= listing.pickupDeadline
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])
+            && after.status == 'assigned' && after.acceptedOrganizationUid == organizationUid
+            && after.updatedAt == request.time;
+        }
+
+        function validHandoverConfirmation() {
+          let listing = get(listingPath(listingId)).data;
+          return isSelectedAssignment(listingId, organizationUid) && isAssignedRecipient(listing)
+            && resource.data.organizationUid == request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['recipientConfirmedAt', 'updatedAt'])
+            && (!('recipientConfirmedAt' in request.resource.data)
+              || (request.resource.data.recipientConfirmedAt == request.time
+                && request.time >= listing.pickupStartsAt && request.time < listing.pickupDeadline));
+        }
+
+        function validCollectedRequest() {
+          let listing = get(listingPath(listingId)).data;
+          let after = getAfter(listingPath(listingId)).data;
+          return isSelectedAssignment(listingId, organizationUid) && isListingProvider(listing)
+            && validPickupCollection(listing, resource.data)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])
+            && after.status == 'collected' && after.collectedAt == request.time
+            && after.updatedAt == request.time;
+        }
+
+        function validClosedRequest(expire) {
+          let listing = get(listingPath(listingId)).data;
+          let after = getAfter(listingPath(listingId)).data;
+          return isSelectedAssignment(listingId, organizationUid)
+            && !('recipientConfirmedAt' in request.resource.data)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'recipientConfirmedAt', 'updatedAt'])
+            && !('acceptedOrganizationUid' in after) && after.updatedAt == request.time
+            && (expire
+              ? request.time >= listing.pickupDeadline && canReconcileListing(listing) && after.status == 'expired'
+              : (isListingProvider(listing) || isAssignedRecipient(listing)) && after.status in ['open', 'cancelled']);
+        }
+
+        allow update: if request.resource.data.updatedAt == request.time
+          && (resource.data.status == 'requested'
+            ? (request.resource.data.status == 'withdrawn' ? validWithdrawal()
+              : request.resource.data.status == 'approved' && validApproval())
+            : resource.data.status == 'approved'
+              ? (request.resource.data.status == 'approved' ? validHandoverConfirmation()
+                : request.resource.data.status == 'collected' ? validCollectedRequest()
+                : request.resource.data.status == 'cancelled' ? validClosedRequest(false)
+                : request.resource.data.status == 'expired' && validClosedRequest(true))
+              : false);
         allow delete: if false;
       }
     }
