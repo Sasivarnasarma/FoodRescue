@@ -36,6 +36,30 @@ Every operation waits for authentication restoration and uses a transaction, inc
 
 Use existing `subscribeToListing` and `subscribeToMyRequestForListing` callbacks for live state, including cache/pending metadata. Cached state is informational; do not enable pickup actions until the listing and request are confirmed by the server. Existing listing parsing exposes `collectedAt`; request parsing exposes `recipientConfirmedAt`. History remains based on authorized listing/request reads; no new collection or index is needed for these operations.
 
+## Shared QR and reference components (Member 5)
+
+Member 5 implements the shared QR display, camera scanning, manual reference fallback, and pickup reminder utilities:
+
+- `mobile/src/lib/qr-service.ts`:
+  - `CURRENT_QR_VERSION = 1`, `QR_PREFIX = 'foodrescue'`.
+  - `encodePickupQrPayload(listingId, version?)`: produces versioned payload `foodrescue:v1:<listingId>`.
+  - `parsePickupReference(rawInput)`: strictly validates scanned QR payload or manual reference input. Strips whitespace, rejects arbitrary URLs (e.g. `https://...`) to prevent phishing or redirection, enforces maximum payload length, validates QR version, and validates listing ID format. Supports entering either full payload or plain reference ID.
+  - `generateQrMatrix(payload)`: generates a 2D boolean module matrix for pure React Native vector rendering.
+- `mobile/src/lib/pickup-reminders.ts`:
+  - `getPickupCountdown(startsAt, deadline, now?)`: models pickup window progression across `upcoming`, `active`, `expiring_soon` (<= 15 minutes before deadline), and `expired` phases.
+  - `computeReminderSchedule(listingId, startsAt, deadline)`: calculates reminder checkpoints.
+  - `isPickupReminderSet(listingId)` & `setPickupReminder(listingId, enabled)`: manages persistent in-app local pickup reminder preferences in `AsyncStorage`.
+- `mobile/src/components/qr-display-card.tsx`:
+  - Recipient pickup display card rendering a crisp vector-grid QR code without native SVG dependencies.
+  - Displays human-readable monospace Reference ID with tap-to-copy action.
+  - Shows real-time window timing/countdown badge and handover confirmation guidance.
+  - In-app pickup reminder toggle button.
+  - Embedded into `mobile/src/components/request-status-card.tsx` for approved requests.
+- `mobile/src/components/qr-scanner-card.tsx`:
+  - Donor scanner component with live `CameraView` barcode scanner, target reticle overlay, and camera permission handling (request prompt, denial banner, and device Settings link).
+  - Integrated "Enter Manually" tab providing full manual reference entry fallback without camera.
+  - In-place QR payload validation and optional `expectedListingId` match verification.
+
 ## Verification and deployment
 
 From the repository root:

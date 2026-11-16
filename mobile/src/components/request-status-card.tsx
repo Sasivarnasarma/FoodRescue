@@ -11,6 +11,7 @@ import {
 import type { FoodListing } from '../lib/listings';
 import type { DonationRequest } from '../lib/requests';
 import { deriveRequestState, formatDateText } from '../lib/request-validation';
+import { QrDisplayCard } from './qr-display-card';
 
 interface RequestStatusCardProps {
   listing: FoodListing;
@@ -177,7 +178,7 @@ export function RequestStatusCard({
         )}
       </View>
 
-      {/* Approved Next Steps Notice */}
+      {/* Approved Next Steps Notice and QR Reference */}
       {derived.status === 'approved' && (
         <View style={styles.nextStepsBox}>
           <Text style={styles.nextStepsTitle}>Pickup details:</Text>
@@ -186,6 +187,13 @@ export function RequestStatusCard({
             {listing.pickupAddress} during the pickup window, you will present
             your organization QR reference and confirm handover.
           </Text>
+          <QrDisplayCard
+            listingId={listing.id}
+            listingTitle={listing.title}
+            pickupStartsAt={listing.pickupStartsAt}
+            pickupDeadline={listing.pickupDeadline}
+            recipientConfirmed={Boolean(request.recipientConfirmedAt)}
+          />
         </View>
       )}
 
