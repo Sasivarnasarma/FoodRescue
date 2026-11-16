@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { AccountButton, AccountField, AccountError } from './donor-controls';
 import { LocationPickerCard } from './location-picker-card';
 import { PhotoAttachmentCard } from './photo-attachment-card';
@@ -168,147 +174,307 @@ export function DonorListingForm({
     change: (v: T) => void,
   ) {
     return (
-      <View style={{ gap: 6 }}>
-        <Text>{label}</Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-          {values.map((value) => (
-            <AccountButton
-              key={value}
-              label={current === value ? `✓ ${value}` : value}
-              secondary={current !== value}
-              disabled={busy}
-              onPress={() => change(value)}
-            />
-          ))}
+      <View style={styles.choiceGroup}>
+        <Text style={styles.sectionLabel}>{label}</Text>
+        <View style={styles.choiceChipsRow}>
+          {values.map((value) => {
+            const isSelected = current === value;
+            return (
+              <TouchableOpacity
+                key={value}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isSelected }}
+                style={[
+                  styles.choiceChip,
+                  isSelected && styles.choiceChipActive,
+                ]}
+                disabled={busy}
+                onPress={() => change(value)}
+              >
+                <Text
+                  style={[
+                    styles.choiceChipText,
+                    isSelected && styles.choiceChipTextActive,
+                  ]}
+                >
+                  {isSelected ? `✓ ${value}` : value}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
       </View>
     );
   }
+
   return (
-    <View style={{ gap: 14 }}>
-      <Text accessibilityRole="header">
-        {initial ? 'Edit draft' : 'New donation'}
-      </Text>
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <Text accessibilityRole="header" style={styles.title}>
+          {initial ? 'Edit draft' : 'New donation'}
+        </Text>
+        <Text style={styles.subtitle}>
+          Share surplus food with verified community organizations
+        </Text>
+      </View>
+
       {error ? <AccountError message={error} /> : null}
-      <AccountField
-        label="Title"
-        value={title}
-        onChangeText={setTitle}
-        maxLength={120}
-        editable={!busy}
-      />
-      <AccountField
-        label="Description"
-        value={description}
-        onChangeText={setDescription}
-        maxLength={1000}
-        multiline
-        editable={!busy}
-      />
-      {choices('Category', FOOD_CATEGORIES, category, setCategory)}
-      <AccountField
-        label="Whole quantity"
-        value={quantity}
-        onChangeText={setQuantity}
-        keyboardType="number-pad"
-        editable={!busy}
-      />
-      {choices(
-        'Unit',
-        ['pack', 'portion', 'item', 'g'] as const,
-        unit,
-        setUnit,
-      )}
-      {choices(
-        'Required storage',
-        ['ambient', 'chilled', 'frozen'] as const,
-        storage,
-        setStorage,
-      )}
-      <AccountField
-        label="Storage instructions"
-        value={instructions}
-        onChangeText={setInstructions}
-        maxLength={500}
-        editable={!busy}
-      />
-      {choices(
-        'Allergen declaration',
-        ['unknown', 'provided'] as const,
-        declaration,
-        setDeclaration,
-      )}
-      {declaration === 'provided' && (
+
+      <View style={styles.formCard}>
+        <Text style={styles.sectionTitle}>1. Food Details</Text>
         <AccountField
-          label="Allergen details"
-          value={allergens}
-          onChangeText={setAllergens}
+          label="Title"
+          value={title}
+          onChangeText={setTitle}
+          placeholder="e.g. Fresh Baked Croissants"
+          maxLength={120}
+          editable={!busy}
+        />
+        <AccountField
+          label="Description"
+          value={description}
+          onChangeText={setDescription}
+          placeholder="Describe preparation, ingredients, quantity details..."
+          maxLength={1000}
+          multiline
+          editable={!busy}
+        />
+        {choices('Category', FOOD_CATEGORIES, category, setCategory)}
+        <View style={styles.quantityRow}>
+          <View style={{ flex: 1 }}>
+            <AccountField
+              label="Whole quantity"
+              value={quantity}
+              onChangeText={setQuantity}
+              keyboardType="number-pad"
+              editable={!busy}
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            {choices(
+              'Unit',
+              ['pack', 'portion', 'item', 'g'] as const,
+              unit,
+              setUnit,
+            )}
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.formCard}>
+        <Text style={styles.sectionTitle}>2. Storage & Safety</Text>
+        {choices(
+          'Required storage',
+          ['ambient', 'chilled', 'frozen'] as const,
+          storage,
+          setStorage,
+        )}
+        <AccountField
+          label="Storage instructions"
+          value={instructions}
+          onChangeText={setInstructions}
+          placeholder="e.g. Keep chilled below 4°C, consume within 24h"
           maxLength={500}
           editable={!busy}
         />
-      )}
-      <LocationPickerCard
-        location={location}
-        address={address}
-        onLocationChange={(coords, label) => {
-          setLocation(coords);
-          setAddress(label);
-        }}
-        disabled={busy}
-      />
-      <Text>Enter times in your device time zone as YYYY-MM-DD HH:mm.</Text>
-      <AccountField
-        label="Pickup starts"
-        value={starts}
-        onChangeText={setStarts}
-        editable={!busy}
-      />
-      <AccountField
-        label="Pickup deadline"
-        value={deadline}
-        onChangeText={setDeadline}
-        editable={!busy}
-      />
-      <AccountField
-        label="Best-before (optional)"
-        value={bestBefore}
-        onChangeText={setBestBefore}
-        editable={!busy}
-      />
-      <AccountField
-        label="Use-by (optional)"
-        value={useBy}
-        onChangeText={setUseBy}
-        editable={!busy}
-      />
-      {photoLoading ? (
-        <ActivityIndicator accessibilityLabel="Loading photo" />
-      ) : (
-        <PhotoAttachmentCard
-          photo={photo}
-          onPhotoSelected={(value) => {
-            setPhoto(value);
-            setPhotoChanged(true);
+        {choices(
+          'Allergen declaration',
+          ['unknown', 'provided'] as const,
+          declaration,
+          setDeclaration,
+        )}
+        {declaration === 'provided' && (
+          <AccountField
+            label="Allergen details"
+            value={allergens}
+            onChangeText={setAllergens}
+            placeholder="e.g. Contains gluten, dairy, traces of nuts"
+            maxLength={500}
+            editable={!busy}
+          />
+        )}
+      </View>
+
+      <View style={styles.formCard}>
+        <Text style={styles.sectionTitle}>3. Pickup Logistics</Text>
+        <LocationPickerCard
+          location={location}
+          address={address}
+          onLocationChange={(coords, label) => {
+            setLocation(coords);
+            setAddress(label);
           }}
           disabled={busy}
         />
-      )}
-      <AccountButton
-        label={busy ? 'Saving…' : 'Save draft'}
-        disabled={busy || photoLoading}
-        onPress={() => void save(false)}
-      />
-      <AccountButton
-        label="Publish donation"
-        disabled={busy || photoLoading}
-        onPress={() => void save(true)}
-      />
-      <AccountButton
-        label="Back to donations"
-        secondary
-        disabled={busy}
-        onPress={onCancel}
-      />
+        <View style={styles.helperNoteBox}>
+          <Text style={styles.helperNoteText}>
+            ℹ️ Enter times in your device time zone as YYYY-MM-DD HH:mm
+          </Text>
+        </View>
+        <AccountField
+          label="Pickup starts"
+          value={starts}
+          onChangeText={setStarts}
+          placeholder="YYYY-MM-DD HH:mm"
+          editable={!busy}
+        />
+        <AccountField
+          label="Pickup deadline"
+          value={deadline}
+          onChangeText={setDeadline}
+          placeholder="YYYY-MM-DD HH:mm"
+          editable={!busy}
+        />
+        <AccountField
+          label="Best-before (optional)"
+          value={bestBefore}
+          onChangeText={setBestBefore}
+          placeholder="YYYY-MM-DD HH:mm"
+          editable={!busy}
+        />
+        <AccountField
+          label="Use-by (optional)"
+          value={useBy}
+          onChangeText={setUseBy}
+          placeholder="YYYY-MM-DD HH:mm"
+          editable={!busy}
+        />
+      </View>
+
+      <View style={styles.formCard}>
+        <Text style={styles.sectionTitle}>4. Photo (optional)</Text>
+        {photoLoading ? (
+          <ActivityIndicator accessibilityLabel="Loading photo" />
+        ) : (
+          <PhotoAttachmentCard
+            photo={photo}
+            onPhotoSelected={(value) => {
+              setPhoto(value);
+              setPhotoChanged(true);
+            }}
+            disabled={busy}
+          />
+        )}
+      </View>
+
+      <View style={styles.actionGroup}>
+        <AccountButton
+          label={busy ? 'Publishing…' : 'Publish donation'}
+          disabled={busy || photoLoading}
+          onPress={() => void save(true)}
+        />
+        <AccountButton
+          label={busy ? 'Saving…' : 'Save draft'}
+          secondary
+          disabled={busy || photoLoading}
+          onPress={() => void save(false)}
+        />
+        <AccountButton
+          label="Cancel / Back to donations"
+          secondary
+          disabled={busy}
+          onPress={onCancel}
+        />
+      </View>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    gap: 16,
+  },
+  header: {
+    marginBottom: 4,
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#0F172A',
+    letterSpacing: -0.3,
+  },
+  subtitle: {
+    fontSize: 13,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  formCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+    gap: 14,
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#167044',
+    letterSpacing: 0.2,
+    textTransform: 'uppercase',
+    paddingBottom: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  sectionLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  choiceGroup: {
+    gap: 8,
+  },
+  choiceChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  choiceChip: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+  },
+  choiceChipActive: {
+    backgroundColor: '#DCFCE7',
+    borderColor: '#167044',
+  },
+  choiceChipText: {
+    fontSize: 13,
+    color: '#475569',
+    fontWeight: '500',
+  },
+  choiceChipTextActive: {
+    color: '#15803D',
+    fontWeight: '700',
+  },
+  quantityRow: {
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'flex-start',
+  },
+  helperNoteBox: {
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    borderRadius: 8,
+    padding: 10,
+  },
+  helperNoteText: {
+    fontSize: 12,
+    color: '#075985',
+    fontWeight: '500',
+  },
+  actionGroup: {
+    gap: 10,
+    marginTop: 4,
+    marginBottom: 20,
+  },
+});

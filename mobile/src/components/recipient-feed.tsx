@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -26,8 +27,12 @@ import { compareDonations } from '../lib/listing-helpers';
 import { ListingDetailSheet } from './listing-detail-sheet';
 import { OrganizationRequestsView } from './organization-requests-view';
 
-export function RecipientFeed() {
-  const [activeTab, setActiveTab] = useState<'feed' | 'requests'>('feed');
+export function RecipientFeed({
+  initialTab = 'feed',
+}: {
+  initialTab?: 'feed' | 'requests';
+} = {}) {
+  const [activeTab, setActiveTab] = useState<'feed' | 'requests'>(initialTab);
   const [cursors, setCursors] = useState<ListingPageOptions[]>([{}]);
   const options = cursors[cursors.length - 1];
   const [attempt, setAttempt] = useState(0);
@@ -334,18 +339,39 @@ export function RecipientFeed() {
         />
       ) : (
         <>
-          <Text accessibilityRole="header" style={styles.title}>
-            Available donations
-          </Text>
-          <AccountButton
-            label={
-              recipientLocation
-                ? 'Change location'
-                : 'Set location for distances'
-            }
-            secondary
+          <View style={styles.sectionHeader}>
+            <Text accessibilityRole="header" style={styles.title}>
+              Available donations
+            </Text>
+            <Text style={styles.sectionSubtitle}>
+              {processedListings.length} surplus{' '}
+              {processedListings.length === 1 ? 'offer' : 'offers'} available
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            accessibilityRole="button"
+            style={styles.locationBar}
             onPress={() => setEditLocation((v) => !v)}
-          />
+          >
+            <Text style={styles.locationBarIcon}>📍</Text>
+            <View style={styles.locationBarTextWrap}>
+              <Text style={styles.locationBarTitle}>
+                {recipientLocation
+                  ? locationAddress || 'Current location set'
+                  : 'Set your location'}
+              </Text>
+              <Text style={styles.locationBarSubtitle}>
+                {recipientLocation
+                  ? 'Tap to change location for distances'
+                  : 'Distances will be calculated once set'}
+              </Text>
+            </View>
+            <Text style={styles.locationBarAction}>
+              {editLocation ? '▲' : '▼'}
+            </Text>
+          </TouchableOpacity>
+
           {editLocation && (
             <LocationPickerCard
               title="Your location (optional)"
@@ -357,75 +383,147 @@ export function RecipientFeed() {
               }}
             />
           )}
-          {!recipientLocation && (
-            <Text>
-              Distance unavailable. Set a location or browse by deadline.
-            </Text>
-          )}
-          <TextInput
-            accessibilityLabel="Search donations"
-            style={styles.searchInput}
-            placeholder="Search donations"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-            {['All', ...FOOD_CATEGORIES].map((category) => (
-              <AccountButton
-                key={category}
-                label={category}
-                secondary={selectedCategory !== category}
-                onPress={() => setSelectedCategory(category)}
-              />
-            ))}
+
+          <View style={styles.searchBarContainer}>
+            <Text style={styles.searchIcon}>🔍</Text>
+            <TextInput
+              accessibilityLabel="Search donations"
+              style={styles.searchInputField}
+              placeholder="Search donations by title, provider, or category..."
+              placeholderTextColor="#94A3B8"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
           </View>
-          <Text>
-            Earliest deadline first. Search and categories apply to the current
-            page.
-          </Text>
-          {page?.fromCache && (
-            <Text accessibilityLiveRegion="polite">
-              Offline or reconnecting. Saved information may be out of date.
+
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.categoryChipsList}
+          >
+            {['All', ...FOOD_CATEGORIES].map((category) => {
+              const isActive = selectedCategory === category;
+              return (
+                <TouchableOpacity
+                  key={category}
+                  accessibilityRole="button"
+                  style={[
+                    styles.categoryChip,
+                    isActive && styles.categoryChipActive,
+                  ]}
+                  onPress={() => setSelectedCategory(category)}
+                >
+                  <Text
+                    style={[
+                      styles.categoryChipText,
+                      isActive && styles.categoryChipTextActive,
+                    ]}
+                  >
+                    {category}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+
+          <View style={styles.sortHelperRow}>
+            <Text style={styles.sortHelperText}>
+              ⏱ Earliest pickup deadline first
             </Text>
+          </View>
+
+          {page?.fromCache && (
+            <View style={styles.bannerInfo}>
+              <Text
+                accessibilityLiveRegion="polite"
+                style={styles.bannerInfoText}
+              >
+                ⚡ Offline or reconnecting. Saved information may be out of
+                date.
+              </Text>
+            </View>
           )}
           {page?.hasPendingWrites && (
-            <Text>Waiting for server confirmation.</Text>
+            <View style={styles.bannerInfo}>
+              <Text style={styles.bannerInfoText}>
+                ⏳ Waiting for server confirmation.
+              </Text>
+            </View>
           )}
           {!current ? (
             <ActivityIndicator accessibilityLabel="Loading donations" />
           ) : current.error ? (
-            <AccountError message={current.error} />
+            <View style={{ gap: 8, marginVertical: 8 }}>
+              <AccountError message={current.error} />
+              <TouchableOpacity
+                accessibilityRole="button"
+                style={styles.retryButton}
+                onPress={() => setAttempt((v) => v + 1)}
+              >
+                <Text style={styles.retryButtonText}>Retry loading</Text>
+              </TouchableOpacity>
+            </View>
           ) : processedListings.length === 0 ? (
-            <Text>
-              No donations match this page. Check another page or change your
-              filters.
-            </Text>
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyIcon}>🍽️</Text>
+              <Text style={styles.emptyTitle}>No Matching Donations</Text>
+              <Text style={styles.emptySubtitle}>
+                No donations match this filter or page. Check another category
+                or clear your search.
+              </Text>
+            </View>
           ) : (
             processedListings.map((item) => (
               <View key={item.listing.id}>{renderItem({ item })}</View>
             ))
           )}
-          <AccountButton
-            label="Refresh / retry"
-            secondary
-            onPress={() => setAttempt((v) => v + 1)}
-          />
-          <View style={{ flexDirection: 'row', gap: 10 }}>
-            <AccountButton
-              label="Previous page"
-              secondary
+
+          <View style={styles.paginationBar}>
+            <TouchableOpacity
+              accessibilityRole="button"
+              style={[
+                styles.pageButton,
+                (!current || cursors.length === 1) && styles.pageButtonDisabled,
+              ]}
               disabled={!current || cursors.length === 1}
               onPress={() => setCursors((v) => v.slice(0, -1))}
-            />
-            <AccountButton
-              label="Next page"
-              secondary
+            >
+              <Text
+                style={[
+                  styles.pageButtonText,
+                  (!current || cursors.length === 1) &&
+                    styles.pageButtonTextDisabled,
+                ]}
+              >
+                ← Previous
+              </Text>
+            </TouchableOpacity>
+            <View style={styles.pageIndicator}>
+              <Text style={styles.pageIndicatorText}>
+                Page {cursors.length}
+              </Text>
+            </View>
+            <TouchableOpacity
+              accessibilityRole="button"
+              style={[
+                styles.pageButton,
+                !page?.nextCursor && styles.pageButtonDisabled,
+              ]}
               disabled={!page?.nextCursor}
               onPress={() => {
                 if (page?.nextCursor)
                   setCursors((v) => [...v, { after: page.nextCursor! }]);
               }}
-            />
+            >
+              <Text
+                style={[
+                  styles.pageButtonText,
+                  !page?.nextCursor && styles.pageButtonTextDisabled,
+                ]}
+              >
+                Next →
+              </Text>
+            </TouchableOpacity>
           </View>
         </>
       )}
@@ -435,98 +533,157 @@ export function RecipientFeed() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#F4F8F5',
   },
-  searchContainer: {
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    marginTop: 4,
+  },
+  sectionSubtitle: {
+    fontSize: 13,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  locationBar: {
     backgroundColor: '#ffffff',
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
-  },
-  searchInput: {
-    backgroundColor: '#f1f5f9',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-    color: '#0f172a',
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#cbd5e1',
+    borderColor: '#E2E8F0',
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1,
   },
-  locationNotice: {
-    marginTop: 6,
-    backgroundColor: '#fef3c7',
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 4,
+  locationBarIcon: {
+    fontSize: 18,
   },
-  locationNoticeText: {
-    fontSize: 11,
-    color: '#b45309',
+  locationBarTextWrap: {
+    flex: 1,
+  },
+  locationBarTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  locationBarSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  locationBarAction: {
+    fontSize: 12,
+    color: '#167044',
+    fontWeight: '700',
+    paddingHorizontal: 4,
+  },
+  searchBarContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingHorizontal: 12,
+    minHeight: 46,
+  },
+  searchIcon: {
+    fontSize: 14,
+    marginRight: 8,
+  },
+  searchInputField: {
+    flex: 1,
+    fontSize: 14,
+    color: '#0F172A',
+    paddingVertical: 10,
+  },
+  sortHelperRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: -2,
+    marginBottom: 4,
+  },
+  sortHelperText: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '500',
   },
   categoryChipsList: {
-    paddingVertical: 10,
+    paddingVertical: 6,
     gap: 8,
   },
   categoryChip: {
-    backgroundColor: '#f1f5f9',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#E2E8F0',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 2,
+    elevation: 1,
   },
   categoryChipActive: {
-    backgroundColor: '#dcfce7',
-    borderColor: '#86efac',
+    backgroundColor: '#167044',
+    borderColor: '#167044',
   },
   categoryChipText: {
     fontSize: 12,
     color: '#475569',
+    fontWeight: '500',
   },
   categoryChipTextActive: {
-    color: '#15803d',
-    fontWeight: '600',
-  },
-  listContent: {
-    padding: 16,
-    paddingBottom: 40,
+    color: '#ffffff',
+    fontWeight: '700',
   },
   card: {
     backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 14,
+    borderRadius: 16,
+    padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#E2E8F0',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   cardTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: 8,
   },
   categoryPill: {
-    backgroundColor: '#f1f5f9',
-    paddingHorizontal: 8,
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 10,
     paddingVertical: 3,
-    borderRadius: 4,
+    borderRadius: 100,
   },
   categoryPillText: {
     fontSize: 11,
-    color: '#64748b',
-    fontWeight: '500',
+    color: '#475569',
+    fontWeight: '600',
   },
   urgencyPill: {
-    backgroundColor: '#eff6ff',
-    paddingHorizontal: 8,
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 10,
     paddingVertical: 3,
-    borderRadius: 4,
+    borderRadius: 100,
   },
   urgencyPillCritical: {
-    backgroundColor: '#fef2f2',
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
   },
   urgencyPillText: {
     fontSize: 11,
@@ -534,48 +691,52 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   urgencyPillTextCritical: {
-    color: '#dc2626',
+    color: '#DC2626',
+    fontWeight: '700',
   },
   title: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: '#0f172a',
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0F172A',
     marginBottom: 2,
+    letterSpacing: -0.3,
   },
   providerName: {
     fontSize: 13,
-    color: '#64748b',
+    color: '#64748B',
     marginBottom: 6,
+    fontWeight: '500',
   },
   description: {
     fontSize: 13,
     color: '#475569',
-    lineHeight: 18,
-    marginBottom: 10,
+    lineHeight: 19,
+    marginBottom: 12,
   },
   cardFooter: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingTop: 8,
+    paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
+    borderTopColor: '#F1F5F9',
   },
   metaBadge: {
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#F8FAFC',
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 4,
+    borderRadius: 6,
     marginRight: 6,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#E2E8F0',
   },
   storageMeta: {
-    backgroundColor: '#f0fdf4',
-    borderColor: '#dcfce7',
+    backgroundColor: '#F0FDF4',
+    borderColor: '#DCFCE7',
   },
   metaBadgeText: {
     fontSize: 11,
     color: '#334155',
+    fontWeight: '500',
   },
   distanceText: {
     marginLeft: 'auto',
@@ -583,51 +744,108 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#075985',
   },
-  center: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  loadingText: {
-    marginTop: 10,
-    fontSize: 14,
-    color: '#64748b',
-  },
   emptyContainer: {
     alignItems: 'center',
-    paddingVertical: 40,
+    paddingVertical: 36,
     paddingHorizontal: 20,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
+  },
+  emptyIcon: {
+    fontSize: 36,
+    marginBottom: 8,
   },
   emptyTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#0f172a',
-    marginBottom: 8,
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 6,
   },
   emptySubtitle: {
     fontSize: 13,
-    color: '#64748b',
+    color: '#64748B',
     textAlign: 'center',
-    lineHeight: 18,
+    lineHeight: 19,
   },
-  errorBox: {
-    backgroundColor: '#fef2f2',
+  bannerInfo: {
+    backgroundColor: '#EFF6FF',
     borderWidth: 1,
-    borderColor: '#fca5a5',
+    borderColor: '#BAE6FD',
     padding: 10,
-    margin: 16,
     borderRadius: 8,
   },
-  errorText: {
+  bannerInfoText: {
+    fontSize: 12,
+    color: '#075985',
+    fontWeight: '500',
+  },
+  retryButton: {
+    alignSelf: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+    marginBottom: 8,
+  },
+  retryButtonText: {
+    color: '#334155',
     fontSize: 13,
-    color: '#dc2626',
+    fontWeight: '600',
+  },
+  paginationBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    marginTop: 4,
+  },
+  pageButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  pageButtonDisabled: {
+    opacity: 0.4,
+  },
+  pageButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  pageButtonTextDisabled: {
+    color: '#94A3B8',
+  },
+  pageIndicator: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: '#E2E8F0',
+  },
+  pageIndicatorText: {
+    fontSize: 12,
+    color: '#475569',
+    fontWeight: '600',
   },
   tabSelector: {
     flexDirection: 'row',
-    backgroundColor: '#e2e8f0',
-    borderRadius: 10,
-    padding: 3,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 4,
     marginBottom: 4,
   },
   tabItem: {
@@ -638,16 +856,16 @@ const styles = StyleSheet.create({
   },
   tabItemActive: {
     backgroundColor: '#ffffff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
     elevation: 2,
   },
   tabItemText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#64748b',
+    color: '#64748B',
   },
   tabItemTextActive: {
     color: '#167044',

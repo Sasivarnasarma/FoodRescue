@@ -9,8 +9,13 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
-  Paper,
   Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
   Typography,
 } from '@mui/material';
 import {
@@ -31,20 +36,63 @@ const dateFormat = new Intl.DateTimeFormat(undefined, {
   timeStyle: 'short',
 });
 
-function Fields({ data }: { data: DocumentData }) {
+function PropertyTable({ data }: { data: DocumentData }) {
+  const entries = Object.entries(data);
   return (
-    <Stack spacing={1}>
-      {Object.entries(data).map(([key, value]) => (
-        <Typography key={key} sx={{ overflowWrap: 'anywhere' }}>
-          <strong>{key.replace(/([A-Z])/g, ' $1')}: </strong>
-          {value instanceof Timestamp
-            ? value.toDate().toLocaleString()
-            : typeof value === 'object'
-              ? JSON.stringify(value)
-              : String(value ?? '—')}
-        </Typography>
-      ))}
-    </Stack>
+    <Box
+      sx={{
+        border: '1px solid #E2E8F0',
+        borderRadius: '4px',
+        overflow: 'hidden',
+        backgroundColor: '#FFFFFF',
+      }}
+    >
+      <Table size="small">
+        <TableBody>
+          {entries.map(([key, value]) => (
+            <TableRow key={key} sx={{ '&:last-child td': { borderBottom: 0 } }}>
+              <TableCell
+                sx={{
+                  width: '32%',
+                  backgroundColor: '#F8FAFC',
+                  fontWeight: 600,
+                  fontSize: '0.6875rem',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.04em',
+                  color: '#475569',
+                  borderRight: '1px solid #E2E8F0',
+                  py: 1,
+                  px: 1.5,
+                }}
+              >
+                {key.replace(/([A-Z])/g, ' $1')}
+              </TableCell>
+              <TableCell
+                sx={{
+                  py: 1,
+                  px: 1.5,
+                  fontSize: '0.8125rem',
+                  color: '#0F172A',
+                  fontFamily:
+                    typeof value === 'object' ||
+                    key.toLowerCase().includes('id') ||
+                    key.toLowerCase().includes('uid')
+                      ? 'monospace'
+                      : 'inherit',
+                  overflowWrap: 'anywhere',
+                }}
+              >
+                {value instanceof Timestamp
+                  ? value.toDate().toLocaleString()
+                  : typeof value === 'object'
+                    ? JSON.stringify(value)
+                    : String(value ?? '—')}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </Box>
   );
 }
 
@@ -175,6 +223,7 @@ export default function ProfileDetails({
       stop?.();
     };
   }, [uid, cursor, attempt]);
+
   const profile = records.profiles;
   const user = records.users;
   const name =
@@ -209,8 +258,24 @@ export default function ProfileDetails({
       maxWidth="md"
       onClose={onClose}
       aria-labelledby="profile-title"
+      slotProps={{
+        paper: {
+          sx: {
+            borderRadius: '6px',
+            border: '1px solid #E2E8F0',
+          },
+        },
+      }}
     >
-      <DialogTitle id="profile-title">
+      <DialogTitle
+        id="profile-title"
+        sx={{
+          p: 2.5,
+          px: 3,
+          borderBottom: '1px solid #E2E8F0',
+          backgroundColor: '#FAFAFA',
+        }}
+      >
         <Stack
           direction={{ xs: 'column', sm: 'row' }}
           spacing={1.5}
@@ -220,11 +285,20 @@ export default function ProfileDetails({
           }}
         >
           <Box>
-            <Typography variant="h6" component="div">
+            <Typography
+              variant="subtitle1"
+              component="div"
+              sx={{ fontWeight: 700, color: '#0F172A' }}
+            >
               {name}
             </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {role} • UID {uid}
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ fontWeight: 500 }}
+            >
+              {role} •{' '}
+              <span style={{ fontFamily: 'monospace' }}>UID: {uid}</span>
             </Typography>
           </Box>
           <Chip
@@ -236,28 +310,49 @@ export default function ProfileDetails({
                   ? 'Rejected'
                   : 'Pending review'
             }
-            color={
-              status === 'approved'
-                ? 'success'
+            sx={{
+              borderRadius: '3px',
+              fontWeight: 600,
+              fontSize: '0.6875rem',
+              letterSpacing: '0.02em',
+              textTransform: 'uppercase',
+              ...(status === 'approved'
+                ? {
+                    backgroundColor: '#F0FDF4',
+                    color: '#15803D',
+                    border: '1px solid #BBF7D0',
+                  }
                 : status === 'rejected'
-                  ? 'error'
-                  : 'warning'
-            }
+                  ? {
+                      backgroundColor: '#FEF2F2',
+                      color: '#B91C1C',
+                      border: '1px solid #FECACA',
+                    }
+                  : {
+                      backgroundColor: '#FFFBEB',
+                      color: '#B45309',
+                      border: '1px solid #FDE68A',
+                    }),
+            }}
           />
         </Stack>
       </DialogTitle>
-      <DialogContent dividers>
+
+      <DialogContent sx={{ p: 3 }}>
         <Stack spacing={2.5}>
           {error && (
             <Alert
               severity="error"
               action={
-                <Button onClick={() => setAttempt((v) => v + 1)}>Retry</Button>
+                <Button size="small" onClick={() => setAttempt((v) => v + 1)}>
+                  Retry
+                </Button>
               }
             >
               {error}
             </Alert>
           )}
+
           {!recordMeta.profiles ||
           recordMeta.profiles.fromCache ||
           recordMeta.profiles.hasPendingWrites ? (
@@ -270,7 +365,7 @@ export default function ProfileDetails({
           {/* Verification feedback section */}
           {status === 'rejected' && (
             <Alert severity="error">
-              <Typography sx={{ fontWeight: 600 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
                 Verification Feedback (Rejected)
               </Typography>
               <Typography variant="body2" sx={{ mt: 0.5 }}>
@@ -280,9 +375,9 @@ export default function ProfileDetails({
                 <Typography
                   variant="caption"
                   color="text.secondary"
-                  sx={{ display: 'block', mt: 0.5 }}
+                  sx={{ display: 'block', mt: 0.5, fontFamily: 'monospace' }}
                 >
-                  Recorded in audit record: {lastAuditId}
+                  Audit record: {lastAuditId}
                 </Typography>
               )}
             </Alert>
@@ -290,20 +385,20 @@ export default function ProfileDetails({
 
           {status === 'approved' && (
             <Alert severity="success">
-              <Typography sx={{ fontWeight: 600 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
                 Profile Verified & Approved
               </Typography>
               <Typography variant="body2" sx={{ mt: 0.5 }}>
-                This profile is approved. Participation also requires an active
-                account; approval does not reactivate a suspended account.
+                This profile is approved. Organization accounts must also remain
+                active to participate in food donations.
               </Typography>
               {lastAuditId && (
                 <Typography
                   variant="caption"
                   color="text.secondary"
-                  sx={{ display: 'block', mt: 0.5 }}
+                  sx={{ display: 'block', mt: 0.5, fontFamily: 'monospace' }}
                 >
-                  Latest approval audit: {lastAuditId}
+                  Approval audit reference: {lastAuditId}
                 </Typography>
               )}
             </Alert>
@@ -311,57 +406,84 @@ export default function ProfileDetails({
 
           {status === 'pending' && (
             <Alert severity="warning">
-              <Typography sx={{ fontWeight: 600 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
                 Pending Verification
               </Typography>
               <Typography variant="body2" sx={{ mt: 0.5 }}>
-                This account has submitted profile details and is awaiting
-                administrator review.
+                This account has submitted organization registration details and
+                is awaiting administrator review.
               </Typography>
             </Alert>
           )}
 
           {/* Stored document fields */}
-          <Stack spacing={2}>
+          <Stack spacing={2.5}>
             {['profiles', 'users'].map((collection) => (
               <Box key={collection}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
+                <Typography
+                  variant="subtitle2"
+                  sx={{
+                    fontWeight: 700,
+                    mb: 1,
+                    color: '#0F172A',
+                    fontSize: '0.8125rem',
+                  }}
+                >
                   {collection === 'profiles'
-                    ? 'Profile Document Details'
-                    : 'User Account Details'}
+                    ? 'Profile Document Attributes'
+                    : 'User Account Record'}
                 </Typography>
                 {records[collection] === undefined ? (
-                  <CircularProgress size={20} aria-label="Loading details" />
+                  <Box sx={{ py: 2 }}>
+                    <CircularProgress size={18} aria-label="Loading details" />
+                  </Box>
                 ) : records[collection] === null ? (
                   <Typography variant="body2" color="text.secondary">
-                    No record available.
+                    No document record found.
                   </Typography>
                 ) : (
-                  <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 1 }}>
-                    <Fields data={records[collection]} />
-                  </Paper>
+                  <PropertyTable data={records[collection]} />
                 )}
               </Box>
             ))}
           </Stack>
 
-          <Divider />
+          <Divider sx={{ my: 1 }} />
 
           {/* Audit trail for this profile */}
           <Box>
-            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
-              Audit History & Review Trail — page {cursors.length + 1}
-            </Typography>
+            <Stack
+              direction="row"
+              spacing={1}
+              sx={{
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                mb: 1,
+              }}
+            >
+              <Typography
+                variant="subtitle2"
+                sx={{
+                  fontWeight: 700,
+                  color: '#0F172A',
+                  fontSize: '0.8125rem',
+                }}
+              >
+                Audit History & Review Log (Page {cursors.length + 1})
+              </Typography>
+            </Stack>
+
             {auditCached && !auditsLoading && !auditError ? (
-              <Alert severity="info">
-                Showing saved audit history. It may be out of date.
+              <Alert severity="info" sx={{ mb: 1.5 }}>
+                Showing cached audit history. It may be out of date.
               </Alert>
             ) : null}
+
             {auditError ? (
               <Alert
                 severity="error"
                 action={
-                  <Button onClick={() => setAttempt((v) => v + 1)}>
+                  <Button size="small" onClick={() => setAttempt((v) => v + 1)}>
                     Retry
                   </Button>
                 }
@@ -369,9 +491,13 @@ export default function ProfileDetails({
                 {auditError}
               </Alert>
             ) : auditsLoading ? (
-              <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+              <Stack
+                direction="row"
+                spacing={1}
+                sx={{ alignItems: 'center', py: 2 }}
+              >
                 <CircularProgress
-                  size={18}
+                  size={16}
                   aria-label="Loading audit history"
                 />
                 <Typography variant="body2" color="text.secondary">
@@ -379,7 +505,7 @@ export default function ProfileDetails({
                 </Typography>
               </Stack>
             ) : audits.length === 0 ? (
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>
                 {cursor
                   ? 'No older reviews on this page.'
                   : auditCached
@@ -387,90 +513,132 @@ export default function ProfileDetails({
                     : 'No reviews have been recorded for this profile.'}
               </Typography>
             ) : (
-              <Stack spacing={1.5}>
-                {audits.map((item) => (
-                  <Paper
-                    key={item.id}
-                    variant="outlined"
-                    sx={{ p: 1.5, borderRadius: 1 }}
-                  >
-                    <Stack
-                      direction={{ xs: 'column', sm: 'row' }}
-                      spacing={1}
-                      sx={{
-                        justifyContent: 'space-between',
-                        alignItems: { sm: 'center' },
-                      }}
-                    >
-                      <Stack
-                        direction="row"
-                        spacing={1}
-                        sx={{ alignItems: 'center' }}
-                      >
-                        <Chip
-                          size="small"
-                          label={
-                            item.newStatus === 'approved'
-                              ? 'Approved'
-                              : 'Rejected'
-                          }
-                          color={
-                            item.newStatus === 'approved' ? 'success' : 'error'
-                          }
-                        />
-                        <Typography variant="caption" color="text.secondary">
-                          ({item.previousStatus} → {item.newStatus})
-                        </Typography>
-                      </Stack>
-                      {item.createdAt && (
-                        <Typography variant="caption" color="text.secondary">
-                          {dateFormat.format(item.createdAt.toDate())}
-                        </Typography>
-                      )}
-                    </Stack>
-                    {item.reason && (
-                      <Typography variant="body2" sx={{ mt: 1 }}>
-                        <strong>Feedback:</strong> {item.reason}
-                      </Typography>
-                    )}
-                    <Stack
-                      direction={{ xs: 'column', sm: 'row' }}
-                      spacing={2}
-                      sx={{ mt: 1 }}
-                    >
-                      <Typography variant="caption" color="text.secondary">
-                        Reviewed by {item.adminUid}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        Audit ID {item.id}
-                      </Typography>
-                    </Stack>
-                  </Paper>
-                ))}
-              </Stack>
+              <TableContainer
+                sx={{
+                  border: '1px solid #E2E8F0',
+                  borderRadius: '4px',
+                  maxHeight: 280,
+                }}
+              >
+                <Table size="small" stickyHeader>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell sx={{ minWidth: 140 }}>Timestamp</TableCell>
+                      <TableCell sx={{ minWidth: 90 }}>Decision</TableCell>
+                      <TableCell sx={{ minWidth: 120 }}>Transition</TableCell>
+                      <TableCell sx={{ minWidth: 180 }}>
+                        Feedback / Reason
+                      </TableCell>
+                      <TableCell sx={{ minWidth: 130 }}>Reviewer</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {audits.map((item) => (
+                      <TableRow key={item.id} hover>
+                        <TableCell>
+                          <Typography variant="caption" color="text.secondary">
+                            {item.createdAt
+                              ? dateFormat.format(item.createdAt.toDate())
+                              : '—'}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            size="small"
+                            label={
+                              item.newStatus === 'approved'
+                                ? 'Approved'
+                                : 'Rejected'
+                            }
+                            sx={{
+                              borderRadius: '3px',
+                              fontWeight: 600,
+                              fontSize: '0.6875rem',
+                              ...(item.newStatus === 'approved'
+                                ? {
+                                    backgroundColor: '#F0FDF4',
+                                    color: '#15803D',
+                                    border: '1px solid #BBF7D0',
+                                  }
+                                : {
+                                    backgroundColor: '#FEF2F2',
+                                    color: '#B91C1C',
+                                    border: '1px solid #FECACA',
+                                  }),
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="caption" color="text.secondary">
+                            {item.previousStatus} → {item.newStatus}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              fontSize: '0.75rem',
+                              color: '#1E293B',
+                              overflowWrap: 'anywhere',
+                            }}
+                          >
+                            {item.reason || '—'}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography
+                            variant="caption"
+                            sx={{
+                              fontFamily: 'monospace',
+                              color: '#64748B',
+                              fontSize: '0.6875rem',
+                            }}
+                          >
+                            {item.adminUid}
+                          </Typography>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
             )}
+
+            <Stack direction="row" spacing={1} sx={{ mt: 1.5 }}>
+              <Button
+                variant="outlined"
+                size="small"
+                disabled={auditsLoading || cursors.length === 0}
+                onClick={() => setCursors((v) => v.slice(0, -1))}
+              >
+                Previous reviews
+              </Button>
+              <Button
+                variant="outlined"
+                size="small"
+                disabled={
+                  auditsLoading || !nextCursor || auditCached || !!auditError
+                }
+                onClick={() => {
+                  if (nextCursor) setCursors((v) => [...v, nextCursor]);
+                }}
+              >
+                Older reviews
+              </Button>
+            </Stack>
           </Box>
-          <Stack direction="row" spacing={1}>
-            <Button
-              disabled={auditsLoading || cursors.length === 0}
-              onClick={() => setCursors((v) => v.slice(0, -1))}
-            >
-              Previous reviews
-            </Button>
-            <Button
-              disabled={
-                auditsLoading || !nextCursor || auditCached || !!auditError
-              }
-              onClick={() => {
-                if (nextCursor) setCursors((v) => [...v, nextCursor]);
-              }}
-            >
-              Older reviews
-            </Button>
-          </Stack>
         </Stack>
       </DialogContent>
-      <DialogActions sx={{ p: 2, justifyContent: 'space-between' }}>
+
+      <DialogActions
+        sx={{
+          py: 1.5,
+          px: 3,
+          borderTop: '1px solid #E2E8F0',
+          backgroundColor: '#FAFAFA',
+          justifyContent: 'space-between',
+        }}
+      >
         <Box>
           {onReview && (
             <Stack direction="row" spacing={1}>
@@ -497,8 +665,11 @@ export default function ProfileDetails({
               <Button
                 disabled={!readyToReview}
                 variant="contained"
-                color="primary"
                 size="small"
+                sx={{
+                  backgroundColor: '#167044',
+                  '&:hover': { backgroundColor: '#115533' },
+                }}
                 onClick={() => {
                   onReview(
                     {
@@ -517,7 +688,14 @@ export default function ProfileDetails({
             </Stack>
           )}
         </Box>
-        <Button onClick={onClose}>Close</Button>
+        <Button
+          onClick={onClose}
+          variant="outlined"
+          size="small"
+          sx={{ color: '#475569' }}
+        >
+          Close
+        </Button>
       </DialogActions>
     </Dialog>
   );

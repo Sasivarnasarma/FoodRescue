@@ -1,21 +1,23 @@
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import {
   AccountButton,
   AccountError,
   AccountField,
   accountErrorMessage,
-  donorColors,
+  SegmentedTabs,
 } from '@/components/donor-controls';
 import { createAccount, signInAccount } from '@/lib/auth';
 
 export function DonorSignIn() {
-  const [creating, setCreating] = useState(false);
+  const [tab, setTab] = useState<'signin' | 'create'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
+
+  const creating = tab === 'create';
 
   async function submit() {
     if (!/^[^\s@]+@[^\s@]+$/.test(email.trim())) {
@@ -47,13 +49,24 @@ export function DonorSignIn() {
 
   return (
     <View style={styles.form}>
-      <Text accessibilityRole="header" style={styles.title}>
-        {creating ? 'Create account' : 'Sign in'}
-      </Text>
+      <SegmentedTabs
+        tabs={[
+          { id: 'signin', label: 'Sign In' },
+          { id: 'create', label: 'Create Account' },
+        ]}
+        selected={tab}
+        onSelect={(newTab) => {
+          setTab(newTab);
+          setMessage('');
+          setPassword('');
+        }}
+      />
+
       <AccountField
         label="Email address"
         value={email}
         onChangeText={setEmail}
+        placeholder="your.email@organization.org"
         autoCapitalize="none"
         autoComplete="email"
         keyboardType="email-address"
@@ -64,32 +77,26 @@ export function DonorSignIn() {
         label="Password"
         value={password}
         onChangeText={setPassword}
+        placeholder="••••••••••••"
         autoCapitalize="none"
         autoComplete={creating ? 'new-password' : 'current-password'}
         secureTextEntry
         editable={!busy}
       />
+
       {!!message && <AccountError message={message} />}
+
       <AccountButton
-        label={busy ? 'Please wait…' : creating ? 'Create account' : 'Sign in'}
+        label={
+          busy ? 'Please wait…' : creating ? 'Create Account →' : 'Sign In →'
+        }
         disabled={busy}
         onPress={submit}
-      />
-      <AccountButton
-        label={creating ? 'I already have an account' : 'Create an account'}
-        secondary
-        disabled={busy}
-        onPress={() => {
-          setPassword('');
-          setMessage('');
-          setCreating((value) => !value);
-        }}
       />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  form: { gap: 14 },
-  title: { color: donorColors.text, fontSize: 22, fontWeight: '700' },
+  form: { gap: 16 },
 });

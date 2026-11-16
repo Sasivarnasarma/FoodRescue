@@ -309,17 +309,26 @@ export function DonorListingsFeed({
       ) : null}
 
       {page?.fromCache && (
-        <Text>Offline or reconnecting. Saved listings may be out of date.</Text>
+        <View style={styles.bannerInfo}>
+          <Text style={styles.bannerInfoText}>
+            ⚡ Offline or reconnecting. Saved listings may be out of date.
+          </Text>
+        </View>
       )}
       {page?.hasPendingWrites && (
-        <Text>Waiting for the server to confirm changes.</Text>
+        <View style={styles.bannerInfo}>
+          <Text style={styles.bannerInfoText}>
+            ⏳ Waiting for the server to confirm changes.
+          </Text>
+        </View>
       )}
       {errorMessage && (
         <TouchableOpacity
           accessibilityRole="button"
+          style={styles.retryButton}
           onPress={() => setAttempt((v) => v + 1)}
         >
-          <Text>Retry loading</Text>
+          <Text style={styles.retryButtonText}>Retry loading</Text>
         </TouchableOpacity>
       )}
       <View style={styles.listContent}>
@@ -328,35 +337,64 @@ export function DonorListingsFeed({
         ))}
         {listings.length === 0 && (
           <View style={styles.emptyContainer}>
+            <Text style={styles.emptyIcon}>📦</Text>
             <Text style={styles.emptyTitle}>No Donations Posted</Text>
             <Text style={styles.emptySubtitle}>
               Create an offer to share surplus food with verified organizations.
             </Text>
             <TouchableOpacity style={styles.emptyCta} onPress={onCreatePress}>
               <Text style={styles.emptyCtaText}>
-                Create Your First Donation
+                + Create Your First Donation
               </Text>
             </TouchableOpacity>
           </View>
         )}
       </View>
-      <TouchableOpacity
-        accessibilityRole="button"
-        disabled={loading || cursors.length === 1}
-        onPress={() => setCursors((v) => v.slice(0, -1))}
-      >
-        <Text>Previous page</Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        accessibilityRole="button"
-        disabled={loading || !page?.nextCursor}
-        onPress={() => {
-          if (page?.nextCursor)
-            setCursors((v) => [...v, { after: page.nextCursor! }]);
-        }}
-      >
-        <Text>Next page</Text>
-      </TouchableOpacity>
+      <View style={styles.paginationBar}>
+        <TouchableOpacity
+          accessibilityRole="button"
+          style={[
+            styles.pageButton,
+            (loading || cursors.length === 1) && styles.pageButtonDisabled,
+          ]}
+          disabled={loading || cursors.length === 1}
+          onPress={() => setCursors((v) => v.slice(0, -1))}
+        >
+          <Text
+            style={[
+              styles.pageButtonText,
+              (loading || cursors.length === 1) &&
+                styles.pageButtonTextDisabled,
+            ]}
+          >
+            ← Previous
+          </Text>
+        </TouchableOpacity>
+        <View style={styles.pageIndicator}>
+          <Text style={styles.pageIndicatorText}>Page {cursors.length}</Text>
+        </View>
+        <TouchableOpacity
+          accessibilityRole="button"
+          style={[
+            styles.pageButton,
+            (loading || !page?.nextCursor) && styles.pageButtonDisabled,
+          ]}
+          disabled={loading || !page?.nextCursor}
+          onPress={() => {
+            if (page?.nextCursor)
+              setCursors((v) => [...v, { after: page.nextCursor! }]);
+          }}
+        >
+          <Text
+            style={[
+              styles.pageButtonText,
+              (loading || !page?.nextCursor) && styles.pageButtonTextDisabled,
+            ]}
+          >
+            Next →
+          </Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -364,7 +402,7 @@ export function DonorListingsFeed({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#F4F8F5',
   },
   center: {
     flex: 1,
@@ -385,50 +423,62 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     backgroundColor: '#ffffff',
     borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
+    borderBottomColor: '#E2E8F0',
   },
   feedTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#0f172a',
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#0F172A',
+    letterSpacing: -0.3,
   },
   feedSubtitle: {
     fontSize: 12,
-    color: '#64748b',
+    color: '#64748B',
+    marginTop: 2,
   },
   createButton: {
     backgroundColor: '#167044',
     paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
+    paddingVertical: 9,
+    borderRadius: 10,
+    shadowColor: '#167044',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 2,
   },
   createButtonText: {
     color: '#ffffff',
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   listContent: {
     padding: 16,
-    paddingBottom: 40,
+    paddingBottom: 24,
   },
   card: {
     backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 14,
+    borderRadius: 16,
+    padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#E2E8F0',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: 8,
   },
   title: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#0f172a',
+    fontWeight: '700',
+    color: '#0F172A',
     flex: 1,
     marginRight: 8,
   },
@@ -436,80 +486,80 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#475569',
     marginBottom: 10,
-    lineHeight: 18,
+    lineHeight: 19,
   },
   detailsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 8,
+    paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
+    borderTopColor: '#F1F5F9',
   },
   detailText: {
     fontSize: 12,
-    color: '#64748b',
+    color: '#64748B',
     fontWeight: '500',
   },
   deadlineText: {
     fontSize: 12,
     color: '#075985',
-    fontWeight: '500',
+    fontWeight: '600',
   },
   badge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 4,
-    backgroundColor: '#f1f5f9',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 100,
+    backgroundColor: '#F1F5F9',
   },
   badgeText: {
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#475569',
   },
   badgeOpen: {
-    backgroundColor: '#dcfce7',
+    backgroundColor: '#DCFCE7',
   },
   badgeOpenText: {
-    color: '#15803d',
+    color: '#15803D',
   },
   badgeDraft: {
-    backgroundColor: '#fef3c7',
+    backgroundColor: '#FEF3C7',
   },
   badgeDraftText: {
-    color: '#b45309',
+    color: '#B45309',
   },
   badgeAssigned: {
-    backgroundColor: '#e0e7ff',
+    backgroundColor: '#E0E7FF',
   },
   badgeAssignedText: {
-    color: '#4338ca',
+    color: '#4338CA',
   },
   badgeCollected: {
-    backgroundColor: '#e2e8f0',
+    backgroundColor: '#E2E8F0',
   },
   badgeCollectedText: {
     color: '#475569',
   },
   badgeCancelled: {
-    backgroundColor: '#fee2e2',
+    backgroundColor: '#FEE2E2',
   },
   badgeCancelledText: {
-    color: '#b91c1c',
+    color: '#B91C1C',
   },
   cardActions: {
-    marginTop: 10,
+    marginTop: 12,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 8,
+    paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
+    borderTopColor: '#F1F5F9',
   },
   reviewRequestsButton: {
-    backgroundColor: '#e1f3e8',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
+    backgroundColor: '#E1F3E8',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
     borderRadius: 8,
   },
   reviewRequestsText: {
@@ -519,9 +569,14 @@ const styles = StyleSheet.create({
   },
   pickupButton: {
     backgroundColor: '#167044',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
     borderRadius: 8,
+    shadowColor: '#167044',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 2,
+    elevation: 1,
   },
   pickupButtonText: {
     color: '#ffffff',
@@ -529,12 +584,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   receiptButton: {
-    backgroundColor: '#f8fafc',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
+    backgroundColor: '#F8FAFC',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#cbd5e1',
+    borderColor: '#CBD5E1',
   },
   receiptButtonText: {
     color: '#475569',
@@ -547,12 +602,12 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   scanButton: {
-    backgroundColor: '#f1f5f9',
-    paddingVertical: 8,
+    backgroundColor: '#ffffff',
+    paddingVertical: 9,
     paddingHorizontal: 12,
-    borderRadius: 8,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#cbd5e1',
+    borderColor: '#CBD5E1',
   },
   scanButtonText: {
     color: '#334155',
@@ -560,53 +615,139 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   cancelActionButton: {
-    paddingVertical: 4,
+    paddingVertical: 6,
     paddingHorizontal: 8,
   },
   cancelActionText: {
     fontSize: 12,
-    color: '#b91c1c',
-    fontWeight: '500',
+    color: '#B91C1C',
+    fontWeight: '600',
   },
   emptyContainer: {
     alignItems: 'center',
-    paddingVertical: 40,
+    paddingVertical: 36,
     paddingHorizontal: 20,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
+  },
+  emptyIcon: {
+    fontSize: 36,
+    marginBottom: 8,
   },
   emptyTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#0f172a',
-    marginBottom: 8,
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 6,
   },
   emptySubtitle: {
     fontSize: 13,
-    color: '#64748b',
+    color: '#64748B',
     textAlign: 'center',
-    lineHeight: 18,
+    lineHeight: 19,
     marginBottom: 16,
   },
   emptyCta: {
     backgroundColor: '#167044',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    shadowColor: '#167044',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 2,
   },
   emptyCtaText: {
     color: '#ffffff',
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   errorBox: {
-    backgroundColor: '#fef2f2',
+    backgroundColor: '#FEF2F2',
     borderWidth: 1,
-    borderColor: '#fca5a5',
-    padding: 10,
+    borderColor: '#FECACA',
+    padding: 12,
     margin: 16,
-    borderRadius: 8,
+    borderRadius: 10,
   },
   errorText: {
     fontSize: 13,
-    color: '#dc2626',
+    color: '#DC2626',
+    fontWeight: '500',
+  },
+  bannerInfo: {
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    padding: 10,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    borderRadius: 8,
+  },
+  bannerInfoText: {
+    fontSize: 12,
+    color: '#075985',
+    fontWeight: '500',
+  },
+  retryButton: {
+    alignSelf: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+    marginBottom: 8,
+  },
+  retryButtonText: {
+    color: '#334155',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  paginationBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    backgroundColor: '#ffffff',
+  },
+  pageButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  pageButtonDisabled: {
+    opacity: 0.4,
+  },
+  pageButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  pageButtonTextDisabled: {
+    color: '#94A3B8',
+  },
+  pageIndicator: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: '#F8FAFC',
+  },
+  pageIndicatorText: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '600',
   },
 });
