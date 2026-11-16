@@ -27,6 +27,11 @@ import {
 import { PermissionManagerCard } from './permission-manager-card';
 import { RecipientFeed } from './recipient-feed';
 import { submitProfile } from '@/lib/verification';
+import {
+  getSavedRecipientLocation,
+  saveRecipientLocation,
+  type LocationCoordinates,
+} from '@/lib/location-service';
 
 const palette = {
   page: '#F8FAFC',
@@ -215,6 +220,31 @@ export function ProfileStatus({ uid, user }: { uid: string; user?: User }) {
   >('feed');
   const [signingOut, setSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState('');
+  const [savedLocation, setSavedLocation] =
+    useState<LocationCoordinates | null>(null);
+  const [savedAddress, setSavedAddress] = useState<string>('');
+
+  useEffect(() => {
+    let active = true;
+    getSavedRecipientLocation(uid).then((saved) => {
+      if (active && saved) {
+        setSavedLocation(saved.coordinates);
+        setSavedAddress(saved.address);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [uid]);
+
+  const handleLocationUpdate = (
+    coords: LocationCoordinates | null,
+    address: string,
+  ) => {
+    setSavedLocation(coords);
+    setSavedAddress(address);
+    void saveRecipientLocation(coords, address, uid);
+  };
 
   const handleSignOut = async () => {
     if (signingOut) return;
@@ -379,6 +409,9 @@ export function ProfileStatus({ uid, user }: { uid: string; user?: User }) {
             <RecipientFeed
               readOnly={!result.confirmed}
               initialTab="feed"
+              initialLocation={savedLocation}
+              initialAddress={savedAddress}
+              onLocationChange={handleLocationUpdate}
               key="feed"
             />
           )}
@@ -386,6 +419,9 @@ export function ProfileStatus({ uid, user }: { uid: string; user?: User }) {
             <RecipientFeed
               readOnly={!result.confirmed}
               initialTab="requests"
+              initialLocation={savedLocation}
+              initialAddress={savedAddress}
+              onLocationChange={handleLocationUpdate}
               key="requests"
             />
           )}

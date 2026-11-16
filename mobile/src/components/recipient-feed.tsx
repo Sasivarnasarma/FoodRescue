@@ -21,6 +21,8 @@ import {
 import {
   calculateHaversineDistanceKm,
   formatDistance,
+  getSavedRecipientLocation,
+  saveRecipientLocation,
   type LocationCoordinates,
 } from '../lib/location-service';
 import { compareDonations } from '../lib/listing-helpers';
@@ -31,9 +33,18 @@ import { OrganizationRequestsView } from './organization-requests-view';
 export function RecipientFeed({
   initialTab = 'feed',
   readOnly = false,
+  initialLocation = null,
+  initialAddress = '',
+  onLocationChange,
 }: {
   initialTab?: 'feed' | 'requests';
   readOnly?: boolean;
+  initialLocation?: LocationCoordinates | null;
+  initialAddress?: string;
+  onLocationChange?: (
+    location: LocationCoordinates | null,
+    address: string,
+  ) => void;
 } = {}) {
   const [activeTab, setActiveTab] = useState<'feed' | 'requests'>(initialTab);
   const INITIAL_PAGE_SIZE = 10;
@@ -48,8 +59,40 @@ export function RecipientFeed({
     error?: string;
   }>();
   const [recipientLocation, setRecipientLocation] =
-    useState<LocationCoordinates | null>(null);
-  const [locationAddress, setLocationAddress] = useState('');
+    useState<LocationCoordinates | null>(initialLocation);
+  const [locationAddress, setLocationAddress] = useState(initialAddress);
+
+  useEffect(() => {
+    let active = true;
+    Promise.resolve().then(() => {
+      if (initialLocation) {
+        if (active) {
+          setRecipientLocation(initialLocation);
+          setLocationAddress(initialAddress);
+        }
+        return;
+      }
+      return getSavedRecipientLocation().then((saved) => {
+        if (active && saved) {
+          setRecipientLocation(saved.coordinates);
+          setLocationAddress(saved.address);
+        }
+      });
+    });
+    return () => {
+      active = false;
+    };
+  }, [initialLocation, initialAddress]);
+
+  const handleLocationChange = (
+    coords: LocationCoordinates | null,
+    label: string,
+  ) => {
+    setRecipientLocation(coords);
+    setLocationAddress(label);
+    onLocationChange?.(coords, label);
+    void saveRecipientLocation(coords, label);
+  };
   const [editLocation, setEditLocation] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
@@ -431,10 +474,7 @@ export function RecipientFeed({
               title="Your location (optional)"
               location={recipientLocation}
               address={locationAddress}
-              onLocationChange={(coords, label) => {
-                setRecipientLocation(coords);
-                setLocationAddress(label);
-              }}
+              onLocationChange={handleLocationChange}
             />
           )}
 

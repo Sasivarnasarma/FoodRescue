@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -12,6 +12,10 @@ import type { Coordinates, FoodListing } from '../lib/listings';
 import { submitDonationRequest } from '../lib/requests';
 import { localDateText, parseLocalDate } from '../lib/listing-form-validation';
 import { getQuickPickupTime } from '../lib/donation-ui';
+import {
+  getSavedRecipientLocation,
+  saveRecipientLocation,
+} from '../lib/location-service';
 import {
   validateDepartureLocation,
   validatePickupProposal,
@@ -50,6 +54,24 @@ export function RequestForm({
 }: RequestFormProps) {
   const [selectedDeparture, setSelectedDeparture] = useState(departureLocation);
   const lock = useRef(false);
+
+  useEffect(() => {
+    let active = true;
+    Promise.resolve().then(() => {
+      if (departureLocation) {
+        if (active) setSelectedDeparture(departureLocation);
+        return;
+      }
+      return getSavedRecipientLocation().then((saved) => {
+        if (active && saved) {
+          setSelectedDeparture(saved.coordinates);
+        }
+      });
+    });
+    return () => {
+      active = false;
+    };
+  }, [departureLocation]);
   // Compute initial proposed pickup time
   const [proposedText, setProposedText] = useState(() => {
     return localDateText(
@@ -232,7 +254,12 @@ export function RequestForm({
         departureLocation={selectedDeparture}
         pickupLocation={listing.pickupLocation}
         disabled={submitting || submitted || disabled}
-        onLocationChange={(location) => setSelectedDeparture(location)}
+        onLocationChange={(location, addr) => {
+          setSelectedDeparture(location);
+          if (location) {
+            void saveRecipientLocation(location, addr || '');
+          }
+        }}
       />
       {/* Error state */}
       {errorMessage ? (
