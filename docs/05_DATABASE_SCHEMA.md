@@ -22,7 +22,7 @@ Planned contract for the donation-only MVP. See [MVP decisions](15_MVP_DECISIONS
 | pickupAddress, pickupLocation | Donor-confirmed address and GeoPoint. Use a business pickup location |
 | pickupStartsAt, pickupDeadline, bestBeforeAt?, useByAt? | Start precedes deadline. If use-by is supplied, pickup deadline must not exceed it |
 | status | draft, open, assigned, collected, cancelled, expired |
-| acceptedOrganizationUid? | Set on assignment and retained on collection. Cleared when a cancelled assignment reopens or closes as expired |
+| acceptedOrganizationUid? | Set on assignment and retained on collection. Cleared when an assignment is cancelled/released or expires |
 | createdAt, updatedAt, collectedAt? | Server timestamps |
 | demoImageKey? | Labelled bundled fallback image |
 
@@ -44,7 +44,7 @@ Publish only with a valid pickup location and complete required details. Assignm
 | plannedPickupAt | Organization's proposed time inside the pickup window |
 | canMeetStorageRequirement | Explicit affirmative declaration for this listing |
 | status | requested, approved, withdrawn, cancelled, collected, expired |
-| recipientConfirmedAt? | Recipient-controlled server timestamp for QR handover acknowledgement |
+| recipientConfirmedAt? | Recipient-controlled server timestamp for handover acknowledgement; cleared on retraction, assignment cancellation or expiry and retained on collection |
 | createdAt, updatedAt | Server timestamps |
 
 One request per organization per listing. A withdrawn or cancelled request stays in history and cannot be resubmitted for that listing. Pending requests do not hold food. Once another request is approved, the UI derives “assigned to another recipient” from the parent instead of writing to every request. If the assignment is cancelled and the listing reopens, pending requests are eligible again only if their proposed pickup time is still valid.

@@ -1269,3 +1269,608 @@ test('request history queries require an explicit limit of at most 50 for every 
     ),
   );
 });
+
+async function assignedFixture(id, uid = 'org-1') {
+  const db = await approvedDonor();
+  const listing = validListing('donor');
+  await setDoc(doc(db, 'foodListings', id), listing);
+  const orgDb = await approvedOrganization(uid);
+  await setDoc(
+    doc(orgDb, 'foodListings', id, 'requests', uid),
+    validRequest(listing, uid),
+  );
+  await approvalBatch(db, id, uid).commit();
+  return { donorDb: db, orgDb };
+}
+
+test('assigned recipient confirms pickup handover in pickup window and can retract', async () => {
+  const { donorDb, orgDb } = await assignedFixture('handover-1', 'org-1');
+  const reqRef = doc(orgDb, 'foodListings', 'handover-1', 'requests', 'org-1');
+
+  // Set pickup window to include current time
+  await env.withSecurityRulesDisabled(async (context) => {
+    await updateDoc(doc(context.firestore(), 'foodListings', 'handover-1'), {
+      pickupStartsAt: Timestamp.fromMillis(Date.now() - 1800_000),
+    });
+  });
+
+  // Assigned recipient confirms handover in pickup window -> succeeds
+  await assertSucceeds(
+    updateDoc(reqRef, {
+      recipientConfirmedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }),
+  );
+  const snap = await getDoc(reqRef);
+  assert.equal(snap.data().status, 'approved');
+  assert.ok(snap.data().recipientConfirmedAt instanceof Timestamp);
+
+  // Recipient can retract handover confirmation
+  await assertSucceeds(
+    updateDoc(reqRef, {
+      recipientConfirmedAt: deleteField(),
+      updatedAt: serverTimestamp(),
+    }),
+  );
+  const retracted = await getDoc(reqRef);
+  assert.equal('recipientConfirmedAt' in retracted.data(), false);
+
+  // Donor cannot set recipientConfirmedAt
+  await assertFails(
+    updateDoc(doc(donorDb, 'foodListings', 'handover-1', 'requests', 'org-1'), {
+      recipientConfirmedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }),
+  );
+});
+
+test('handover confirmation fails before pickup window or by unassigned organization', async () => {
+  const { orgDb } = await assignedFixture('future-pickup', 'org-1');
+  const reqRef = doc(
+    orgDb,
+    'foodListings',
+    'future-pickup',
+    'requests',
+    'org-1',
+  );
+
+  // Handover confirmation fails before pickup window starts (validListing starts in +1800s)
+  await assertFails(
+    updateDoc(reqRef, {
+      recipientConfirmedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }),
+  );
+
+  // Put into pickup window
+  await env.withSecurityRulesDisabled(async (context) => {
+    await updateDoc(doc(context.firestore(), 'foodListings', 'future-pickup'), {
+      pickupStartsAt: Timestamp.fromMillis(Date.now() - 1800_000),
+    });
+  });
+
+  // Other organization cannot set recipientConfirmedAt
+  const org2Db = await approvedOrganization('org-2', 'Second Shelter');
+  await assertFails(
+    updateDoc(
+      doc(org2Db, 'foodListings', 'future-pickup', 'requests', 'org-1'),
+      {
+        recipientConfirmedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      },
+    ),
+  );
+});
+
+test('atomic collection completes within 5 minutes of recipient confirmation', async () => {
+  const { donorDb, orgDb } = await assignedFixture('collect-1', 'org-1');
+  const listingRef = doc(donorDb, 'foodListings', 'collect-1');
+  const reqRef = doc(orgDb, 'foodListings', 'collect-1', 'requests', 'org-1');
+
+  // Put into pickup window and confirm handover
+  await env.withSecurityRulesDisabled(async (context) => {
+    await updateDoc(doc(context.firestore(), 'foodListings', 'collect-1'), {
+      pickupStartsAt: Timestamp.fromMillis(Date.now() - 1800_000),
+    });
+  });
+  await assertSucceeds(
+    updateDoc(reqRef, {
+      recipientConfirmedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }),
+  );
+
+  // Non-atomic listing update fails
+  await assertFails(
+    updateDoc(listingRef, {
+      status: 'collected',
+      collectedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }),
+  );
+
+  // Non-atomic request update fails
+  await assertFails(
+    updateDoc(doc(donorDb, 'foodListings', 'collect-1', 'requests', 'org-1'), {
+      status: 'collected',
+      updatedAt: serverTimestamp(),
+    }),
+  );
+
+  // Atomic collection transaction succeeds
+  await assertSucceeds(
+    runTransaction(donorDb, async (tx) => {
+      tx.update(listingRef, {
+        status: 'collected',
+        collectedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      tx.update(
+        doc(donorDb, 'foodListings', 'collect-1', 'requests', 'org-1'),
+        {
+          status: 'collected',
+          updatedAt: serverTimestamp(),
+        },
+      );
+    }),
+  );
+
+  const collectedListing = (await getDoc(listingRef)).data();
+  assert.equal(collectedListing.status, 'collected');
+  assert.ok(collectedListing.collectedAt instanceof Timestamp);
+
+  const collectedReq = (await getDoc(reqRef)).data();
+  assert.equal(collectedReq.status, 'collected');
+
+  // Replay protection: once collected, no further updates allowed
+  await assertFails(
+    updateDoc(listingRef, {
+      status: 'assigned',
+      updatedAt: serverTimestamp(),
+    }),
+  );
+});
+
+test('collection fails if confirmation is stale or deadline passed', async () => {
+  const { donorDb } = await assignedFixture('stale-collect', 'org-1');
+  const listingRef = doc(donorDb, 'foodListings', 'stale-collect');
+  const reqRef = doc(
+    donorDb,
+    'foodListings',
+    'stale-collect',
+    'requests',
+    'org-1',
+  );
+
+  // Stale confirmation (> 5 minutes ago)
+  await env.withSecurityRulesDisabled(async (context) => {
+    await updateDoc(doc(context.firestore(), 'foodListings', 'stale-collect'), {
+      pickupStartsAt: Timestamp.fromMillis(Date.now() - 1800_000),
+    });
+    await updateDoc(
+      doc(
+        context.firestore(),
+        'foodListings',
+        'stale-collect',
+        'requests',
+        'org-1',
+      ),
+      {
+        recipientConfirmedAt: Timestamp.fromMillis(Date.now() - 360_000), // 6 minutes ago
+      },
+    );
+  });
+
+  await assertFails(
+    runTransaction(donorDb, async (tx) => {
+      tx.update(listingRef, {
+        status: 'collected',
+        collectedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      tx.update(reqRef, {
+        status: 'collected',
+        updatedAt: serverTimestamp(),
+      });
+    }),
+  );
+
+  // Overdue collection (deadline passed)
+  await env.withSecurityRulesDisabled(async (context) => {
+    await updateDoc(doc(context.firestore(), 'foodListings', 'stale-collect'), {
+      pickupDeadline: Timestamp.fromMillis(Date.now() - 10_000), // deadline elapsed
+    });
+    await updateDoc(
+      doc(
+        context.firestore(),
+        'foodListings',
+        'stale-collect',
+        'requests',
+        'org-1',
+      ),
+      {
+        recipientConfirmedAt: Timestamp.fromMillis(Date.now() - 60_000), // 1 minute ago
+      },
+    );
+  });
+
+  await assertFails(
+    runTransaction(donorDb, async (tx) => {
+      tx.update(listingRef, {
+        status: 'collected',
+        collectedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      tx.update(reqRef, {
+        status: 'collected',
+        updatedAt: serverTimestamp(),
+      });
+    }),
+  );
+});
+
+test('assigned cancellation reopens listing when at least 15 minutes remain', async () => {
+  const { donorDb, orgDb } = await assignedFixture('reopen-1', 'org-1');
+  const reopenListingRef = doc(donorDb, 'foodListings', 'reopen-1');
+  const reopenReqRef = doc(
+    donorDb,
+    'foodListings',
+    'reopen-1',
+    'requests',
+    'org-1',
+  );
+
+  // Recipient cancels assignment with >= 15 min left (validListing has deadline in +7200s)
+  await assertSucceeds(
+    runTransaction(orgDb, async (tx) => {
+      tx.update(doc(orgDb, 'foodListings', 'reopen-1'), {
+        status: 'open',
+        acceptedOrganizationUid: deleteField(),
+        updatedAt: serverTimestamp(),
+      });
+      tx.update(doc(orgDb, 'foodListings', 'reopen-1', 'requests', 'org-1'), {
+        status: 'cancelled',
+        recipientConfirmedAt: deleteField(),
+        updatedAt: serverTimestamp(),
+      });
+    }),
+  );
+
+  const reopenedData = (await getDoc(reopenListingRef)).data();
+  assert.equal(reopenedData.status, 'open');
+  assert.equal('acceptedOrganizationUid' in reopenedData, false);
+
+  const cancelledReqData = (await getDoc(reopenReqRef)).data();
+  assert.equal(cancelledReqData.status, 'cancelled');
+});
+
+test('assigned cancellation closes listing completely when less than 15 minutes remain', async () => {
+  const { donorDb, orgDb } = await assignedFixture('close-1', 'org-1');
+  const closeListingRef = doc(donorDb, 'foodListings', 'close-1');
+  const closeReqRef = doc(
+    donorDb,
+    'foodListings',
+    'close-1',
+    'requests',
+    'org-1',
+  );
+
+  // Set deadline to 10 minutes in the future (< 15 min cutoff)
+  await env.withSecurityRulesDisabled(async (context) => {
+    await updateDoc(doc(context.firestore(), 'foodListings', 'close-1'), {
+      pickupDeadline: Timestamp.fromMillis(Date.now() + 600_000),
+    });
+  });
+
+  // Reopening fails when < 15 min left
+  await assertFails(
+    runTransaction(orgDb, async (tx) => {
+      tx.update(doc(orgDb, 'foodListings', 'close-1'), {
+        status: 'open',
+        acceptedOrganizationUid: deleteField(),
+        updatedAt: serverTimestamp(),
+      });
+      tx.update(doc(orgDb, 'foodListings', 'close-1', 'requests', 'org-1'), {
+        status: 'cancelled',
+        recipientConfirmedAt: deleteField(),
+        updatedAt: serverTimestamp(),
+      });
+    }),
+  );
+
+  // Complete cancellation succeeds when < 15 min left
+  await assertSucceeds(
+    runTransaction(orgDb, async (tx) => {
+      tx.update(doc(orgDb, 'foodListings', 'close-1'), {
+        status: 'cancelled',
+        acceptedOrganizationUid: deleteField(),
+        updatedAt: serverTimestamp(),
+      });
+      tx.update(doc(orgDb, 'foodListings', 'close-1', 'requests', 'org-1'), {
+        status: 'cancelled',
+        recipientConfirmedAt: deleteField(),
+        updatedAt: serverTimestamp(),
+      });
+    }),
+  );
+
+  const closedListingData = (await getDoc(closeListingRef)).data();
+  assert.equal(closedListingData.status, 'cancelled');
+});
+
+test('expiry reconciliation marks overdue open and assigned listings as expired', async () => {
+  const now = Date.now();
+  const donorDb = await approvedDonor();
+
+  // Active open listing cannot be expired before deadline
+  const activeListingRef = doc(donorDb, 'foodListings', 'active-expiry');
+  await setDoc(
+    activeListingRef,
+    validListing('donor', {
+      pickupDeadline: new Timestamp(Math.floor(now / 1000) + 3600, 0),
+    }),
+  );
+  await assertFails(
+    updateDoc(activeListingRef, {
+      status: 'expired',
+      updatedAt: serverTimestamp(),
+    }),
+  );
+
+  // Overdue open listing can be expired after deadline
+  const overdueOpenRef = doc(donorDb, 'foodListings', 'overdue-open');
+  await env.withSecurityRulesDisabled(async (context) => {
+    await setDoc(
+      doc(context.firestore(), 'foodListings', 'overdue-open'),
+      validListing('donor', {
+        pickupDeadline: Timestamp.fromMillis(now - 10_000),
+      }),
+    );
+  });
+  await assertSucceeds(
+    updateDoc(overdueOpenRef, {
+      status: 'expired',
+      updatedAt: serverTimestamp(),
+    }),
+  );
+  assert.equal((await getDoc(overdueOpenRef)).data().status, 'expired');
+});
+
+test('expiry reconciliation marks overdue assigned listings and requests as expired', async () => {
+  const { donorDb, orgDb } = await assignedFixture('overdue-assigned', 'org-1');
+  const now = Date.now();
+
+  await env.withSecurityRulesDisabled(async (context) => {
+    await updateDoc(
+      doc(context.firestore(), 'foodListings', 'overdue-assigned'),
+      {
+        pickupDeadline: Timestamp.fromMillis(now - 10_000),
+      },
+    );
+  });
+
+  const assignedRef = doc(donorDb, 'foodListings', 'overdue-assigned');
+  const reqRef = doc(
+    donorDb,
+    'foodListings',
+    'overdue-assigned',
+    'requests',
+    'org-1',
+  );
+
+  // Assigned recipient can reconcile their overdue assignment
+  await assertSucceeds(
+    runTransaction(orgDb, async (tx) => {
+      tx.update(doc(orgDb, 'foodListings', 'overdue-assigned'), {
+        status: 'expired',
+        acceptedOrganizationUid: deleteField(),
+        updatedAt: serverTimestamp(),
+      });
+      tx.update(
+        doc(orgDb, 'foodListings', 'overdue-assigned', 'requests', 'org-1'),
+        {
+          status: 'expired',
+          updatedAt: serverTimestamp(),
+        },
+      );
+    }),
+  );
+
+  assert.equal((await getDoc(assignedRef)).data().status, 'expired');
+  assert.equal((await getDoc(reqRef)).data().status, 'expired');
+});
+
+function pickupTransition(
+  db,
+  id,
+  status,
+  uid = 'org-1',
+  clearConfirmation = true,
+) {
+  const batch = writeBatch(db);
+  batch.update(doc(db, 'foodListings', id), {
+    status,
+    updatedAt: serverTimestamp(),
+    ...(status === 'collected'
+      ? { collectedAt: serverTimestamp() }
+      : { acceptedOrganizationUid: deleteField() }),
+  });
+  batch.update(doc(db, 'foodListings', id, 'requests', uid), {
+    status: status === 'open' ? 'cancelled' : status,
+    updatedAt: serverTimestamp(),
+    ...(status !== 'collected' && clearConfirmation
+      ? { recipientConfirmedAt: deleteField() }
+      : {}),
+  });
+  return batch;
+}
+
+test('collection rejects future confirmations, early pickup, and revoked recipients', async () => {
+  const id = 'collection-guards';
+  const { donorDb, orgDb } = await assignedFixture(id);
+  const parent = doc(donorDb, 'foodListings', id);
+  const request = doc(orgDb, 'foodListings', id, 'requests', 'org-1');
+  await env.withSecurityRulesDisabled(async (context) => {
+    await updateDoc(doc(context.firestore(), 'foodListings', id), {
+      pickupStartsAt: Timestamp.fromMillis(Date.now() - 1_800_000),
+    });
+    await updateDoc(
+      doc(context.firestore(), 'foodListings', id, 'requests', 'org-1'),
+      { recipientConfirmedAt: Timestamp.fromMillis(Date.now() + 120_000) },
+    );
+  });
+  await assertFails(pickupTransition(donorDb, id, 'collected').commit());
+  await env.withSecurityRulesDisabled(async (context) => {
+    await updateDoc(doc(context.firestore(), 'foodListings', id), {
+      pickupStartsAt: Timestamp.fromMillis(Date.now() + 600_000),
+    });
+    await updateDoc(
+      doc(context.firestore(), 'foodListings', id, 'requests', 'org-1'),
+      { recipientConfirmedAt: Timestamp.now() },
+    );
+  });
+  await assertFails(pickupTransition(donorDb, id, 'collected').commit());
+  await env.withSecurityRulesDisabled(async (context) => {
+    await updateDoc(doc(context.firestore(), 'foodListings', id), {
+      pickupStartsAt: Timestamp.fromMillis(Date.now() - 1_800_000),
+    });
+  });
+  await updateDoc(request, {
+    recipientConfirmedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  await review(admin(), 'org-1', 'rejected');
+  await assertFails(pickupTransition(donorDb, id, 'collected').commit());
+  await review(admin(), 'org-1', 'approved');
+  await assertFails(pickupTransition(admin(), id, 'collected').commit());
+  await assertSucceeds(pickupTransition(donorDb, id, 'collected').commit());
+  assert.equal((await getDoc(parent)).data().status, 'collected');
+});
+
+test('confirmed assignments expire atomically and must clear confirmation', async () => {
+  const id = 'expiry-confirmed';
+  const { donorDb, orgDb } = await assignedFixture(id);
+  await env.withSecurityRulesDisabled(async (context) => {
+    await updateDoc(doc(context.firestore(), 'foodListings', id), {
+      pickupStartsAt: Timestamp.fromMillis(Date.now() - 1_800_000),
+    });
+  });
+  const request = doc(orgDb, 'foodListings', id, 'requests', 'org-1');
+  await updateDoc(request, {
+    recipientConfirmedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  await env.withSecurityRulesDisabled(async (context) => {
+    await updateDoc(doc(context.firestore(), 'foodListings', id), {
+      pickupDeadline: Timestamp.fromMillis(Date.now() - 1000),
+    });
+  });
+  await assertFails(
+    pickupTransition(donorDb, id, 'expired', 'org-1', false).commit(),
+  );
+  await assertSucceeds(pickupTransition(orgDb, id, 'expired').commit());
+  assert.equal('recipientConfirmedAt' in (await getDoc(request)).data(), false);
+  assert.equal(
+    'acceptedOrganizationUid' in
+      (await getDoc(doc(donorDb, 'foodListings', id))).data(),
+    false,
+  );
+});
+
+test('donor can close an early assignment but recipient cannot bypass the reopen policy', async () => {
+  const id = 'donor-close';
+  const { donorDb, orgDb } = await assignedFixture(id);
+  await assertFails(pickupTransition(orgDb, id, 'cancelled').commit());
+  await assertFails(
+    updateDoc(doc(donorDb, 'foodListings', id), {
+      status: 'cancelled',
+      acceptedOrganizationUid: deleteField(),
+      updatedAt: serverTimestamp(),
+    }),
+  );
+  await assertSucceeds(pickupTransition(donorDb, id, 'cancelled').commit());
+  assert.equal(
+    (await getDoc(doc(orgDb, 'foodListings', id, 'requests', 'org-1'))).data()
+      .status,
+    'cancelled',
+  );
+});
+
+test('expiry and cancellation cannot mutate a detached approved request', async () => {
+  const id = 'detached';
+  const { donorDb } = await assignedFixture(id);
+  await env.withSecurityRulesDisabled(async (context) => {
+    await updateDoc(doc(context.firestore(), 'foodListings', id), {
+      status: 'expired',
+      acceptedOrganizationUid: deleteField(),
+      pickupDeadline: Timestamp.fromMillis(Date.now() - 1000),
+    });
+  });
+  const request = doc(donorDb, 'foodListings', id, 'requests', 'org-1');
+  await assertFails(
+    updateDoc(request, {
+      status: 'expired',
+      updatedAt: serverTimestamp(),
+      recipientConfirmedAt: deleteField(),
+    }),
+  );
+  await env.withSecurityRulesDisabled(async (context) => {
+    await updateDoc(doc(context.firestore(), 'foodListings', id), {
+      status: 'cancelled',
+    });
+  });
+  await assertFails(
+    updateDoc(request, {
+      status: 'cancelled',
+      updatedAt: serverTimestamp(),
+      recipientConfirmedAt: deleteField(),
+    }),
+  );
+});
+
+test('admin can expire an assignment but an unrelated organization cannot', async () => {
+  const id = 'admin-expiry';
+  const { donorDb } = await assignedFixture(id);
+  const other = await approvedOrganization('org-other');
+  await env.withSecurityRulesDisabled(async (context) => {
+    await updateDoc(doc(context.firestore(), 'foodListings', id), {
+      pickupDeadline: Timestamp.fromMillis(Date.now() - 1000),
+    });
+  });
+  await assertFails(pickupTransition(other, id, 'expired').commit());
+  await assertSucceeds(pickupTransition(admin(), id, 'expired').commit());
+  assert.equal(
+    (await getDoc(doc(donorDb, 'foodListings', id))).data().status,
+    'expired',
+  );
+});
+
+test('collection and recipient retraction cannot both succeed concurrently', async () => {
+  const id = 'collection-race';
+  const { donorDb, orgDb } = await assignedFixture(id);
+  await env.withSecurityRulesDisabled(async (context) => {
+    await updateDoc(doc(context.firestore(), 'foodListings', id), {
+      pickupStartsAt: Timestamp.fromMillis(Date.now() - 1_800_000),
+    });
+  });
+  const request = doc(orgDb, 'foodListings', id, 'requests', 'org-1');
+  await updateDoc(request, {
+    recipientConfirmedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  const results = await Promise.allSettled([
+    pickupTransition(donorDb, id, 'collected').commit(),
+    updateDoc(request, {
+      recipientConfirmedAt: deleteField(),
+      updatedAt: serverTimestamp(),
+    }),
+  ]);
+  assert.equal(results.filter((r) => r.status === 'fulfilled').length, 1);
+  const parent = (await getDoc(doc(donorDb, 'foodListings', id))).data();
+  const child = (await getDoc(request)).data();
+  if (parent.status === 'collected') assert.equal(child.status, 'collected');
+  else {
+    assert.equal(parent.status, 'assigned');
+    assert.equal('recipientConfirmedAt' in child, false);
+  }
+});

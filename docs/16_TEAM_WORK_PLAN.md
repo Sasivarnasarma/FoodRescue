@@ -60,9 +60,11 @@ Members 3, 4 and 5 provide request rules, ranking and departure-location helpers
 |---|---|---|
 | 1 | Connect the scanner to the donor's pickup screen. Show recipient confirmation, complete collection, and update donor history. | Pending |
 | 2 | Build the recipient pickup screen with the QR reference, signed-in handover confirmation, and collection history. Add cancellation and expiry messages. | Pending |
-| 3 | Enforce confirmation ownership, the five-minute confirmation window, and atomic collection. Implement approved cancellation and expiry transitions. | Pending |
+| 3 | Enforce confirmation ownership, the five-minute confirmation window, and atomic collection. Implement approved cancellation and expiry transitions. | Done |
 | 4 | Connect verification feedback and audit history to the admin review flow. Prepare an assigned donation with valid pickup times for integration. | Pending |
 | 5 | Add QR display and scanning, manual reference entry, and camera permission fallback. Add local pickup reminders if time permits. | Pending |
+
+Member 3 pickup rules and shared helpers are reviewed, with 41 mobile and 44 rules tests passing. The other Phase 4 screens/integration and physical-device acceptance remain pending. See [pickup integration](19_PICKUP_AND_TRANSITIONS.md).
 
 **Ready when** the recipient confirms pickup on phone B and the donor completes it on phone A. Both phones show collected.
 

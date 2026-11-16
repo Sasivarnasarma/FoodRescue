@@ -57,3 +57,5 @@ Use `mobile/src/lib/listings.ts` for draft creation/update, publishing, cancella
 Manual integration check: publish without a photo on donor phone A, verify live appearance on approved organization phone B, open details, and repeat with a compressed photo. Verify pagination, offline/cache labels, denied reads for pending applicants and revoked donor write access. Physical two-phone verification and live deployment remain separate integration steps.
 
 For the combined Phase 2 screens and emulator-only seed data, see [the integration checklist](../docs/17_PHASE2_INTEGRATION.md).
+
+For Phase 4 confirmation, collection, cancellation and expiry rules, helper APIs and remaining manual checks, see [pickup integration](../docs/19_PICKUP_AND_TRANSITIONS.md). Deploy the reviewed rules before using these operations against the live project.
