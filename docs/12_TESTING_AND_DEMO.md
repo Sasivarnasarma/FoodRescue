@@ -54,3 +54,17 @@ On Android, check the following before the team demo:
 Permission lifecycle tests use controlled native API responses. Actual camera,
 keyboard, font scaling and system-bar behavior still require physical-device
 verification. These fixes require no Firebase console or rules changes.
+
+## Recipient donation detail regression check
+
+On Android, sign in as an approved organization, open Browse Food and tap a
+donation. Confirm the detail panel fills the space between the app header and
+bottom navigation, displays the title and Back to Feed action, and scrolls down
+to the request section. Test with and without a listing photo, then return and
+open a different donation. Repeat by selecting a donation from My Requests.
+
+While details are loading, the loading message and Back to donations action must
+remain visible. If the donation is removed or access is denied, verify the
+unavailable message and Back action appear. Repeat at a small screen size and
+with an offline cached listing. Native layout still requires device verification;
+TypeScript and data-logic tests do not exercise Android layout measurement.

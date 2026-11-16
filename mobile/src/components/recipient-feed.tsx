@@ -191,9 +191,18 @@ export function RecipientFeed({
   if (selectedId) {
     const selected = detail?.id === selectedId ? detail.listing : null;
     if (detail?.id !== selectedId)
-      return <ActivityIndicator accessibilityLabel="Loading listing details" />;
+      return (
+        <View style={styles.detailState}>
+          <ActivityIndicator accessibilityLabel="Loading listing details" />
+          <Text>Loading donation details…</Text>
+          <AccountButton
+            label="Back to donations"
+            onPress={() => setSelectedId(undefined)}
+          />
+        </View>
+      );
     return (
-      <View style={{ gap: 12 }}>
+      <View style={styles.detailContainer}>
         {detail.cached && <Text>Saved information may be out of date.</Text>}
         {selected && !detail.error ? (
           <ListingDetailSheet
@@ -213,7 +222,7 @@ export function RecipientFeed({
             onBack={() => setSelectedId(undefined)}
           />
         ) : (
-          <>
+          <View style={styles.detailState}>
             <Text>
               This donation is no longer available, or the connection was lost.
             </Text>
@@ -221,7 +230,7 @@ export function RecipientFeed({
               label="Back to donations"
               onPress={() => setSelectedId(undefined)}
             />
-          </>
+          </View>
         )}
       </View>
     );
@@ -531,6 +540,16 @@ export function RecipientFeed({
   );
 }
 const styles = StyleSheet.create({
+  detailContainer: {
+    flex: 1,
+    gap: 12,
+  },
+  detailState: {
+    flex: 1,
+    padding: 16,
+    gap: 12,
+    justifyContent: 'center',
+  },
   container: {
     flex: 1,
     backgroundColor: '#F4F8F5',
