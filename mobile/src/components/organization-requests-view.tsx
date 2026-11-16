@@ -183,8 +183,7 @@ export function OrganizationRequestsView({
     setTimeout(() => setRefreshing(false), 500);
   };
 
-  const hasMore =
-    page?.nextCursor !== null || requests.length >= displayLimit;
+  const hasMore = page?.nextCursor !== null || requests.length >= displayLimit;
   const handleWithdraw = (listingId: string) => {
     if (
       !currentUid ||
@@ -598,9 +597,7 @@ export function OrganizationRequestsView({
         {loadingMore ? (
           <View style={styles.loadingMoreRow}>
             <ActivityIndicator size="small" color={colors.green} />
-            <Text style={styles.loadingMoreText}>
-              Loading more requests…
-            </Text>
+            <Text style={styles.loadingMoreText}>Loading more requests…</Text>
           </View>
         ) : hasMore && requests.length >= displayLimit ? (
           <Pressable
@@ -616,7 +613,8 @@ export function OrganizationRequestsView({
           <View style={styles.endOfFeedRow}>
             <Text style={styles.endOfFeedText}>
               ✨ All caught up ({filteredRequests.length}{' '}
-              {filteredRequests.length === 1 ? 'request' : 'requests'} displayed)
+              {filteredRequests.length === 1 ? 'request' : 'requests'}{' '}
+              displayed)
             </Text>
           </View>
         ) : null}

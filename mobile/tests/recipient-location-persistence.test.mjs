@@ -82,7 +82,10 @@ test('clearSavedRecipientLocation removes saved coordinates', async () => {
 });
 
 test('corrupted or invalid storage payload returns null gracefully', async () => {
-  await mockStorage.setItem('@foodrescue_recipient_saved_location', 'not-valid-json');
+  await mockStorage.setItem(
+    '@foodrescue_recipient_saved_location',
+    'not-valid-json',
+  );
   const result1 = await getSavedRecipientLocation();
   assert.equal(result1, null);
 
