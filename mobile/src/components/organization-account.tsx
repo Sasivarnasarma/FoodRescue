@@ -24,6 +24,7 @@ import {
   type AccountSnapshot,
   type ProfileSnapshot,
 } from '@/lib/organization-verification';
+import { PermissionManagerCard } from './permission-manager-card';
 import { RecipientFeed } from './recipient-feed';
 import { submitProfile } from '@/lib/verification';
 
@@ -423,6 +424,8 @@ export function ProfileStatus({ uid, user }: { uid: string; user?: User }) {
                   </Action>
                 </View>
               </View>
+
+              <PermissionManagerCard />
             </ScrollView>
           )}
         </View>

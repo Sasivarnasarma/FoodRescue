@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -15,7 +16,6 @@ import {
   type FoodListing,
   type ListingStatus,
   type ListingPage,
-  type ListingPageOptions,
 } from '../lib/listings';
 import { getFirebaseClients } from '../lib/firebase';
 
@@ -36,10 +36,13 @@ export function DonorListingsFeed({
   onOpenPickup,
   onScanPress,
 }: DonorListingsFeedProps) {
+  const INITIAL_PAGE_SIZE = 10;
+  const [displayLimit, setDisplayLimit] = useState(INITIAL_PAGE_SIZE);
   const [page, setPage] = useState<ListingPage>();
-  const [cursors, setCursors] = useState<ListingPageOptions[]>([{}]);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [attempt, setAttempt] = useState(0);
-  const options = cursors[cursors.length - 1];
   const now = useCurrentTime();
   const [listings, setListings] = useState<FoodListing[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,8 +55,6 @@ export function DonorListingsFeed({
     Promise.resolve()
       .then(() => {
         if (!active) return;
-        setLoading(true);
-        setPage(undefined);
         const uid = getFirebaseClients().auth.currentUser?.uid;
         if (!uid) throw new Error('Sign in to view your donations.');
         stop = subscribeToProviderListings(
@@ -62,16 +63,23 @@ export function DonorListingsFeed({
             if (!active) return;
             setListings(items);
             setPage(metadata);
+            setHasMore(
+              items.length >= displayLimit && metadata.nextCursor !== null,
+            );
             setErrorMessage(null);
             setLoading(false);
+            setLoadingMore(false);
+            setRefreshing(false);
           },
           (error) => {
             if (!active) return;
             setErrorMessage(error.message);
             setListings([]);
             setLoading(false);
+            setLoadingMore(false);
+            setRefreshing(false);
           },
-          options,
+          { limit: displayLimit },
         );
       })
       .catch((cause: unknown) => {
@@ -80,12 +88,26 @@ export function DonorListingsFeed({
           cause instanceof Error ? cause.message : 'Could not load listings.',
         );
         setLoading(false);
+        setLoadingMore(false);
+        setRefreshing(false);
       });
     return () => {
       active = false;
       stop?.();
     };
-  }, [options, attempt]);
+  }, [displayLimit, attempt]);
+
+  const handleLoadMore = () => {
+    if (loading || loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    setDisplayLimit((prev) => prev + 10);
+  };
+
+  const handleRefresh = () => {
+    setRefreshing(true);
+    setDisplayLimit(INITIAL_PAGE_SIZE);
+    setAttempt((v) => v + 1);
+  };
 
   const handleCancelListing = (listing: FoodListing) => {
     Alert.alert(
@@ -284,7 +306,29 @@ export function DonorListingsFeed({
   }
 
   return (
-    <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.contentContainer}
+      keyboardShouldPersistTaps="handled"
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={handleRefresh}
+          colors={['#167044']}
+          tintColor="#167044"
+        />
+      }
+      onScroll={({ nativeEvent }) => {
+        const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
+        const isCloseToBottom =
+          layoutMeasurement.height + contentOffset.y >=
+          contentSize.height - 150;
+        if (isCloseToBottom && hasMore && !loadingMore && !loading) {
+          handleLoadMore();
+        }
+      }}
+      scrollEventThrottle={200}
+    >
       <View style={styles.topBar}>
         <View style={styles.topBarHeading}>
           <Text style={styles.feedTitle}>Your Donations</Text>
@@ -357,50 +401,30 @@ export function DonorListingsFeed({
           </View>
         )}
       </View>
-      <View style={styles.paginationBar}>
-        <TouchableOpacity
-          accessibilityRole="button"
-          style={[
-            styles.pageButton,
-            (loading || cursors.length === 1) && styles.pageButtonDisabled,
-          ]}
-          disabled={loading || cursors.length === 1}
-          onPress={() => setCursors((v) => v.slice(0, -1))}
-        >
-          <Text
-            style={[
-              styles.pageButtonText,
-              (loading || cursors.length === 1) &&
-                styles.pageButtonTextDisabled,
-            ]}
+      {/* Infinite Scroll Footer */}
+      <View style={styles.infiniteScrollFooter}>
+        {loadingMore ? (
+          <View style={styles.loadingMoreRow}>
+            <ActivityIndicator size="small" color="#167044" />
+            <Text style={styles.loadingMoreText}>Loading more donations…</Text>
+          </View>
+        ) : hasMore && listings.length >= displayLimit ? (
+          <TouchableOpacity
+            accessibilityRole="button"
+            style={styles.loadMoreButton}
+            onPress={handleLoadMore}
           >
-            ← Previous
-          </Text>
-        </TouchableOpacity>
-        <View style={styles.pageIndicator}>
-          <Text style={styles.pageIndicatorText}>Page {cursors.length}</Text>
-        </View>
-        <TouchableOpacity
-          accessibilityRole="button"
-          style={[
-            styles.pageButton,
-            (loading || !page?.nextCursor) && styles.pageButtonDisabled,
-          ]}
-          disabled={loading || !page?.nextCursor}
-          onPress={() => {
-            if (page?.nextCursor)
-              setCursors((v) => [...v, { after: page.nextCursor! }]);
-          }}
-        >
-          <Text
-            style={[
-              styles.pageButtonText,
-              (loading || !page?.nextCursor) && styles.pageButtonTextDisabled,
-            ]}
-          >
-            Next →
-          </Text>
-        </TouchableOpacity>
+            <Text style={styles.loadMoreButtonText}>
+              Scroll or tap to load more
+            </Text>
+          </TouchableOpacity>
+        ) : listings.length > 0 ? (
+          <View style={styles.endOfFeedRow}>
+            <Text style={styles.endOfFeedText}>
+              ✨ All caught up ({listings.length} donations)
+            </Text>
+          </View>
+        ) : null}
       </View>
     </ScrollView>
   );
@@ -410,6 +434,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F4F8F5',
+  },
+  contentContainer: {
+    paddingBottom: 40,
   },
   center: {
     flex: 1,
@@ -744,46 +771,43 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
-  paginationBar: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  infiniteScrollFooter: {
+    paddingVertical: 20,
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
-    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  pageButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 8,
+  loadingMoreRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 10,
+  },
+  loadingMoreText: {
+    fontSize: 13,
+    color: '#167044',
+    fontWeight: '600',
+  },
+  loadMoreButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 20,
     backgroundColor: '#F1F5F9',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#CBD5E1',
   },
-  pageButtonDisabled: {
-    opacity: 0.4,
-  },
-  pageButtonText: {
+  loadMoreButtonText: {
     fontSize: 13,
     fontWeight: '600',
     color: '#334155',
   },
-  pageButtonTextDisabled: {
-    color: '#94A3B8',
+  endOfFeedRow: {
+    paddingVertical: 12,
+    alignItems: 'center',
   },
-  pageIndicator: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6,
-    backgroundColor: '#F8FAFC',
-  },
-  pageIndicatorText: {
+  endOfFeedText: {
     fontSize: 12,
-    color: '#64748B',
-    fontWeight: '600',
+    color: '#94A3B8',
+    fontWeight: '500',
   },
 });

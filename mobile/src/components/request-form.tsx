@@ -4,17 +4,14 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { DepartureLocationCard } from './departure-location-card';
+import { DateTimePickerField } from './date-time-picker-field';
 import type { Coordinates, FoodListing } from '../lib/listings';
 import { submitDonationRequest } from '../lib/requests';
 import { localDateText, parseLocalDate } from '../lib/listing-form-validation';
-import {
-  getQuickPickupTime,
-  type PickupTimeShortcut,
-} from '../lib/donation-ui';
+import { getQuickPickupTime } from '../lib/donation-ui';
 import {
   validateDepartureLocation,
   validatePickupProposal,
@@ -68,20 +65,6 @@ export function RequestForm({
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [submitted, setSubmitted] = useState(false);
-
-  const setQuickTime = (type: PickupTimeShortcut) => {
-    const chosen = getQuickPickupTime(
-      type,
-      listing.pickupStartsAt,
-      listing.pickupDeadline,
-    );
-    if (!chosen) {
-      setErrorMessage('No future minute is available in this pickup window.');
-      return;
-    }
-    setProposedText(localDateText(chosen));
-    setErrorMessage('');
-  };
 
   const handleSubmit = async () => {
     if (lock.current || submitting || submitted || disabled) return;
@@ -159,55 +142,54 @@ export function RequestForm({
         one organization.
       </Text>
 
-      {/* Pickup proposal section */}
+      {/* Pickup proposal section with Date & Time Picker */}
       <View style={styles.fieldSection}>
-        <Text style={styles.label}>Proposed Pickup Date & Time</Text>
-        <Text style={styles.hint}>
-          Pickup window: {localDateText(listing.pickupStartsAt)} to{' '}
-          {localDateText(listing.pickupDeadline)} (local time)
-        </Text>
-        <TextInput
-          accessibilityLabel="Proposed pickup date and time"
-          style={styles.input}
+        <DateTimePickerField
+          label="Proposed Pickup Date & Time *"
           value={proposedText}
           onChangeText={(val) => {
             setProposedText(val);
             if (errorMessage) setErrorMessage('');
           }}
-          placeholder="YYYY-MM-DD HH:mm"
-          placeholderTextColor={colors.secondary}
           editable={!submitting && !submitted && !disabled}
-          autoCapitalize="none"
-          autoCorrect={false}
+          minDate={listing.pickupStartsAt ?? new Date()}
+          maxDate={listing.pickupDeadline ?? undefined}
         />
-
-        {/* Quick select buttons */}
         <View style={styles.quickButtonsRow}>
-          <Pressable
-            accessibilityRole="button"
-            style={styles.quickButton}
-            onPress={() => setQuickTime('start')}
-            disabled={submitting || submitted || disabled}
-          >
-            <Text style={styles.quickButtonText}>At Start</Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            style={styles.quickButton}
-            onPress={() => setQuickTime('mid')}
-            disabled={submitting || submitted || disabled}
-          >
-            <Text style={styles.quickButtonText}>Mid Window</Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            style={styles.quickButton}
-            onPress={() => setQuickTime('beforeDeadline')}
-            disabled={submitting || submitted || disabled}
-          >
-            <Text style={styles.quickButtonText}>30m Before End</Text>
-          </Pressable>
+          {(['start', 'mid', 'beforeDeadline'] as const).map(
+            (shortcut, index) => (
+              <Pressable
+                key={shortcut}
+                accessibilityRole="button"
+                disabled={submitting || submitted || disabled}
+                style={styles.quickButton}
+                onPress={() => {
+                  const chosen = getQuickPickupTime(
+                    shortcut,
+                    listing.pickupStartsAt,
+                    listing.pickupDeadline,
+                  );
+                  if (!chosen) {
+                    setErrorMessage(
+                      'No future minute is available in this pickup window.',
+                    );
+                    return;
+                  }
+                  setProposedText(localDateText(chosen));
+                  setErrorMessage('');
+                }}
+              >
+                <Text style={styles.quickButtonText}>
+                  {['At Window Start', 'Mid Window', '30m Before End'][index]}
+                </Text>
+              </Pressable>
+            ),
+          )}
         </View>
+        <Text style={styles.hint}>
+          Allowed window: {localDateText(listing.pickupStartsAt)} to{' '}
+          {localDateText(listing.pickupDeadline)} (local time)
+        </Text>
       </View>
 
       {/* Storage requirement affirmation */}
@@ -443,10 +425,19 @@ const styles = StyleSheet.create({
   },
   submitButton: {
     backgroundColor: colors.green,
-    borderRadius: 10,
+    borderRadius: 14,
     paddingVertical: 14,
+    paddingHorizontal: 20,
+    minHeight: 52,
+    borderWidth: 1.5,
+    borderColor: '#115533',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: colors.green,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   submitButtonText: {
     color: '#FFFFFF',

@@ -16,7 +16,6 @@ import {
   subscribeToListing,
   type FoodListing,
   type ListingPage,
-  type ListingPageOptions,
 } from '../lib/listings';
 import {
   calculateHaversineDistanceKm,
@@ -36,11 +35,11 @@ export function RecipientFeed({
   readOnly?: boolean;
 } = {}) {
   const [activeTab, setActiveTab] = useState<'feed' | 'requests'>(initialTab);
-  const [cursors, setCursors] = useState<ListingPageOptions[]>([{}]);
-  const options = cursors[cursors.length - 1];
+  const INITIAL_PAGE_SIZE = 10;
+  const [displayLimit, setDisplayLimit] = useState(INITIAL_PAGE_SIZE);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState<{
-    options: ListingPageOptions;
     attempt: number;
     items: FoodListing[];
     page?: ListingPage;
@@ -117,33 +116,46 @@ export function RecipientFeed({
         if (active)
           stop = subscribeToOpenListings(
             (items, page) => {
-              if (active) setState({ options, attempt, items, page });
+              if (active) {
+                setState({ attempt, items, page });
+                setLoadingMore(false);
+              }
             },
             (error) => {
-              if (active)
-                setState({ options, attempt, items: [], error: error.message });
+              if (active) {
+                setState({ attempt, items: [], error: error.message });
+                setLoadingMore(false);
+              }
             },
-            options,
+            { limit: displayLimit },
           );
       })
       .catch(() => {
-        if (active)
+        if (active) {
           setState({
-            options,
             attempt,
             items: [],
             error: 'Could not load donations. Retry.',
           });
+          setLoadingMore(false);
+        }
       });
     return () => {
       active = false;
       stop?.();
     };
-  }, [options, attempt]);
-  const current =
-    state?.options === options && state.attempt === attempt ? state : undefined;
+  }, [displayLimit, attempt]);
+
+  const handleLoadMore = () => {
+    if (loadingMore) return;
+    setLoadingMore(true);
+    setDisplayLimit((prev) => prev + 10);
+  };
+
+  const current = state?.attempt === attempt ? state : undefined;
   const listings = useMemo(() => current?.items ?? [], [current]);
   const page = current?.page;
+  const hasMore = page?.nextCursor !== null || listings.length >= displayLimit;
   const processedListings = useMemo(
     () =>
       listings
@@ -490,52 +502,33 @@ export function RecipientFeed({
             ))
           )}
 
-          <View style={styles.paginationBar}>
-            <TouchableOpacity
-              accessibilityRole="button"
-              style={[
-                styles.pageButton,
-                (!current || cursors.length === 1) && styles.pageButtonDisabled,
-              ]}
-              disabled={!current || cursors.length === 1}
-              onPress={() => setCursors((v) => v.slice(0, -1))}
-            >
-              <Text
-                style={[
-                  styles.pageButtonText,
-                  (!current || cursors.length === 1) &&
-                    styles.pageButtonTextDisabled,
-                ]}
+          {/* Infinite Scroll Footer */}
+          <View style={styles.infiniteScrollFooter}>
+            {loadingMore ? (
+              <View style={styles.loadingMoreRow}>
+                <ActivityIndicator size="small" color="#167044" />
+                <Text style={styles.loadingMoreText}>
+                  Loading more donations…
+                </Text>
+              </View>
+            ) : hasMore && (current?.items.length ?? 0) >= displayLimit ? (
+              <TouchableOpacity
+                accessibilityRole="button"
+                style={styles.loadMoreButton}
+                onPress={handleLoadMore}
               >
-                ← Previous
-              </Text>
-            </TouchableOpacity>
-            <View style={styles.pageIndicator}>
-              <Text style={styles.pageIndicatorText}>
-                Page {cursors.length}
-              </Text>
-            </View>
-            <TouchableOpacity
-              accessibilityRole="button"
-              style={[
-                styles.pageButton,
-                !page?.nextCursor && styles.pageButtonDisabled,
-              ]}
-              disabled={!page?.nextCursor}
-              onPress={() => {
-                if (page?.nextCursor)
-                  setCursors((v) => [...v, { after: page.nextCursor! }]);
-              }}
-            >
-              <Text
-                style={[
-                  styles.pageButtonText,
-                  !page?.nextCursor && styles.pageButtonTextDisabled,
-                ]}
-              >
-                Next →
-              </Text>
-            </TouchableOpacity>
+                <Text style={styles.loadMoreButtonText}>
+                  Scroll or tap to load more
+                </Text>
+              </TouchableOpacity>
+            ) : processedListings.length > 0 ? (
+              <View style={styles.endOfFeedRow}>
+                <Text style={styles.endOfFeedText}>
+                  ✨ All caught up ({processedListings.length} available
+                  donations)
+                </Text>
+              </View>
+            ) : null}
           </View>
         </ScrollView>
       )}
@@ -836,49 +829,48 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
-  paginationBar: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    justifyContent: 'space-between',
+  infiniteScrollFooter: {
+    paddingVertical: 18,
     alignItems: 'center',
-    paddingVertical: 12,
-    marginTop: 4,
+    justifyContent: 'center',
   },
-  pageButton: {
+  loadingMoreRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 8,
+  },
+  loadingMoreText: {
+    fontSize: 13,
+    color: '#167044',
+    fontWeight: '600',
+  },
+  loadMoreButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 20,
     backgroundColor: '#ffffff',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#CBD5E1',
     shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
+    shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 1,
   },
-  pageButtonDisabled: {
-    opacity: 0.4,
-  },
-  pageButtonText: {
+  loadMoreButtonText: {
     fontSize: 13,
     fontWeight: '600',
     color: '#334155',
   },
-  pageButtonTextDisabled: {
-    color: '#94A3B8',
+  endOfFeedRow: {
+    paddingVertical: 12,
+    alignItems: 'center',
   },
-  pageIndicator: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6,
-    backgroundColor: '#E2E8F0',
-  },
-  pageIndicatorText: {
+  endOfFeedText: {
     fontSize: 12,
-    color: '#475569',
-    fontWeight: '600',
+    color: '#94A3B8',
+    fontWeight: '500',
   },
   tabSelector: {
     flexDirection: 'row',

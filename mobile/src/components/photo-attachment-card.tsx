@@ -19,6 +19,7 @@ interface PhotoAttachmentCardProps {
   onPhotoSelected: (photo: CompressedPhotoResult | null) => void;
   onProcessingChange?: (processing: boolean) => void;
   disabled?: boolean;
+  embedded?: boolean;
 }
 
 export function PhotoAttachmentCard({
@@ -26,6 +27,7 @@ export function PhotoAttachmentCard({
   onPhotoSelected,
   onProcessingChange,
   disabled = false,
+  embedded = false,
 }: PhotoAttachmentCardProps) {
   const picking = useRef(false);
   const [compressing, setCompressing] = useState(false);
@@ -81,11 +83,15 @@ export function PhotoAttachmentCard({
   };
 
   return (
-    <View style={styles.card}>
-      <Text style={styles.title}>Listing Photo (Optional)</Text>
-      <Text style={styles.subtitle}>
-        Optional photo. You can continue without a photo.
-      </Text>
+    <View style={[styles.card, embedded && styles.embeddedCard]}>
+      {!embedded && (
+        <>
+          <Text style={styles.title}>Listing Photo (Optional)</Text>
+          <Text style={styles.subtitle}>
+            Optional photo. You can continue without a photo.
+          </Text>
+        </>
+      )}
 
       {errorMessage ? (
         <View style={styles.errorBox}>
@@ -169,21 +175,27 @@ export function PhotoAttachmentCard({
 const styles = StyleSheet.create({
   card: {
     backgroundColor: '#ffffff',
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 16,
-    marginVertical: 8,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
+    marginVertical: 4,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+  },
+  embeddedCard: {
+    backgroundColor: 'transparent',
+    padding: 0,
+    marginVertical: 0,
+    borderWidth: 0,
   },
   title: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#0f172a',
+    fontWeight: '700',
+    color: '#0F172A',
     marginBottom: 4,
   },
   subtitle: {
     fontSize: 13,
-    color: '#64748b',
+    color: '#64748B',
     marginBottom: 12,
   },
   buttonRow: {
@@ -194,13 +206,15 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#167044',
     paddingVertical: 12,
-    borderRadius: 8,
+    borderRadius: 10,
     alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#115533',
   },
   secondaryButton: {
-    backgroundColor: '#f1f5f9',
-    borderWidth: 1,
-    borderColor: '#cbd5e1',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
   },
   actionButtonText: {
     color: '#ffffff',
