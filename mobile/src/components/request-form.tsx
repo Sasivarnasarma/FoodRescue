@@ -4,10 +4,10 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { DepartureLocationCard } from './departure-location-card';
+import { DateTimePickerField } from './date-time-picker-field';
 import type { Coordinates, FoodListing } from '../lib/listings';
 import { submitDonationRequest } from '../lib/requests';
 import { localDateText, parseLocalDate } from '../lib/listing-form-validation';
@@ -66,26 +66,6 @@ export function RequestForm({
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [submitted, setSubmitted] = useState(false);
-
-  const setQuickTime = (type: 'start' | 'mid' | 'beforeDeadline') => {
-    const now = Date.now();
-    const startMillis = listing.pickupStartsAt?.getTime() ?? now;
-    const deadlineMillis = listing.pickupDeadline?.getTime() ?? now + 3600000;
-
-    let chosenMillis = now;
-    if (type === 'start') {
-      chosenMillis = Math.max(startMillis, now + 5 * 60 * 1000);
-    } else if (type === 'mid') {
-      const windowStart = Math.max(startMillis, now);
-      chosenMillis = windowStart + (deadlineMillis - windowStart) / 2;
-    } else {
-      chosenMillis = deadlineMillis - 30 * 60 * 1000; // 30 mins before deadline
-    }
-
-    if (chosenMillis <= now) chosenMillis = now + 10 * 60 * 1000;
-    setProposedText(localDateText(new Date(chosenMillis)));
-    setErrorMessage('');
-  };
 
   const handleSubmit = async () => {
     if (lock.current || submitting || submitted || disabled) return;
@@ -163,55 +143,28 @@ export function RequestForm({
         one organization.
       </Text>
 
-      {/* Pickup proposal section */}
+      {/* Pickup proposal section with Date & Time Picker */}
       <View style={styles.fieldSection}>
-        <Text style={styles.label}>Proposed Pickup Date & Time</Text>
-        <Text style={styles.hint}>
-          Pickup window: {localDateText(listing.pickupStartsAt)} to{' '}
-          {localDateText(listing.pickupDeadline)} (local time)
-        </Text>
-        <TextInput
-          accessibilityLabel="Proposed pickup date and time"
-          style={styles.input}
+        <DateTimePickerField
+          label="Proposed Pickup Date & Time *"
           value={proposedText}
           onChangeText={(val) => {
             setProposedText(val);
             if (errorMessage) setErrorMessage('');
           }}
-          placeholder="YYYY-MM-DD HH:mm"
-          placeholderTextColor={colors.secondary}
           editable={!submitting && !submitted && !disabled}
-          autoCapitalize="none"
-          autoCorrect={false}
+          minDate={listing.pickupStartsAt ?? new Date()}
+          maxDate={listing.pickupDeadline ?? undefined}
+          presets={[
+            { label: 'At Window Start', offsetMinutes: 5 },
+            { label: 'Mid Window', offsetMinutes: 60 },
+            { label: '30m Before End', offsetMinutes: 120 },
+          ]}
         />
-
-        {/* Quick select buttons */}
-        <View style={styles.quickButtonsRow}>
-          <Pressable
-            accessibilityRole="button"
-            style={styles.quickButton}
-            onPress={() => setQuickTime('start')}
-            disabled={submitting || submitted || disabled}
-          >
-            <Text style={styles.quickButtonText}>At Start</Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            style={styles.quickButton}
-            onPress={() => setQuickTime('mid')}
-            disabled={submitting || submitted || disabled}
-          >
-            <Text style={styles.quickButtonText}>Mid Window</Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            style={styles.quickButton}
-            onPress={() => setQuickTime('beforeDeadline')}
-            disabled={submitting || submitted || disabled}
-          >
-            <Text style={styles.quickButtonText}>30m Before End</Text>
-          </Pressable>
-        </View>
+        <Text style={styles.hint}>
+          Allowed window: {localDateText(listing.pickupStartsAt)} to{' '}
+          {localDateText(listing.pickupDeadline)} (local time)
+        </Text>
       </View>
 
       {/* Storage requirement affirmation */}
@@ -444,10 +397,19 @@ const styles = StyleSheet.create({
   },
   submitButton: {
     backgroundColor: colors.green,
-    borderRadius: 10,
+    borderRadius: 14,
     paddingVertical: 14,
+    paddingHorizontal: 20,
+    minHeight: 52,
+    borderWidth: 1.5,
+    borderColor: '#115533',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: colors.green,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   submitButtonText: {
     color: '#FFFFFF',

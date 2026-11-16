@@ -54,10 +54,14 @@ export function LocationPickerCard({
     }
   }
   return (
-    <View style={{ gap: 10, paddingVertical: 12 }}>
-      <Text accessibilityRole="header">{title}</Text>
+    <View style={styles.card}>
+      <View style={styles.headerRow}>
+        <Text accessibilityRole="header" style={styles.title}>
+          📍 {title}
+        </Text>
+      </View>
       <AccountButton
-        label={busy ? 'Getting location…' : 'Use current location'}
+        label={busy ? 'Getting location…' : '📍 Use current location'}
         disabled={disabled || busy}
         onPress={() => void gps()}
       />
@@ -68,26 +72,32 @@ export function LocationPickerCard({
         editable={!disabled && !busy}
         onChangeText={(text) => onLocationChange(location, text)}
       />
-      <AccountField
-        label="Latitude"
-        value={latitude}
-        editable={!disabled && !busy}
-        keyboardType="numbers-and-punctuation"
-        onChangeText={(text) => {
-          setLatitude(text);
-          onLocationChange(null, address);
-        }}
-      />
-      <AccountField
-        label="Longitude"
-        value={longitude}
-        editable={!disabled && !busy}
-        keyboardType="numbers-and-punctuation"
-        onChangeText={(text) => {
-          setLongitude(text);
-          onLocationChange(null, address);
-        }}
-      />
+      <View style={styles.coordRow}>
+        <View style={styles.coordCol}>
+          <AccountField
+            label="Latitude"
+            value={latitude}
+            editable={!disabled && !busy}
+            keyboardType="numbers-and-punctuation"
+            onChangeText={(text) => {
+              setLatitude(text);
+              onLocationChange(null, address);
+            }}
+          />
+        </View>
+        <View style={styles.coordCol}>
+          <AccountField
+            label="Longitude"
+            value={longitude}
+            editable={!disabled && !busy}
+            keyboardType="numbers-and-punctuation"
+            onChangeText={(text) => {
+              setLongitude(text);
+              onLocationChange(null, address);
+            }}
+          />
+        </View>
+      </View>
       <AccountButton
         label="Use entered coordinates"
         secondary
@@ -102,16 +112,21 @@ export function LocationPickerCard({
         }}
       />
       {location && (
-        <Text accessibilityLiveRegion="polite">
-          Selected {location.latitude.toFixed(5)},{' '}
-          {location.longitude.toFixed(5)}
-        </Text>
+        <View style={styles.selectedBadge}>
+          <Text
+            accessibilityLiveRegion="polite"
+            style={styles.selectedBadgeText}
+          >
+            ✓ Coordinates confirmed: {location.latitude.toFixed(5)},{' '}
+            {location.longitude.toFixed(5)}
+          </Text>
+        </View>
       )}
       {error ? (
-        <>
+        <View style={styles.errorContainer}>
           <AccountError message={error} />
           <AccountButton
-            label="Open device Settings"
+            label="⚙️ Open device Settings"
             secondary
             onPress={() => {
               void Linking.openSettings().catch(() =>
@@ -121,8 +136,50 @@ export function LocationPickerCard({
               );
             }}
           />
-        </>
+        </View>
       ) : null}
     </View>
   );
 }
+
+const styles = {
+  card: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    padding: 14,
+    gap: 12,
+  },
+  headerRow: {
+    marginBottom: 2,
+  },
+  title: {
+    fontSize: 14,
+    fontWeight: '700' as const,
+    color: '#0F172A',
+  },
+  coordRow: {
+    flexDirection: 'row' as const,
+    gap: 10,
+  },
+  coordCol: {
+    flex: 1,
+  },
+  selectedBadge: {
+    backgroundColor: '#DCFCE7',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  selectedBadgeText: {
+    fontSize: 12,
+    fontWeight: '600' as const,
+    color: '#15803D',
+  },
+  errorContainer: {
+    gap: 8,
+  },
+};
