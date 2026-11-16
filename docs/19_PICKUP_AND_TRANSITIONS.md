@@ -1,6 +1,6 @@
 # Phase 4 pickup rules and shared helpers
 
-Member 3 implements the shared data operations and rules. Donor/recipient pickup screens, QR display/scanning, manual reference entry, reminders and admin/demo integration remain the other members' tasks.
+Members 1, 2, 3 and 5 provide donor and recipient pickup screens, shared data operations and rules, QR scanning/display, manual references and foreground reminders. Member 4 admin/demo integration and physical-device acceptance remain pending.
 
 ## Pickup contract
 
@@ -90,3 +90,11 @@ The donor donations feed opens assigned pickup details and collected receipts. T
 Donor PR review: the donor scanner wraps `QrScannerCard` and uses the same `foodrescue:v1:<listingId>` payload as the recipient display. Legacy JSON/URL parsing was removed. Lookup checks donor ownership, rejects stale callbacks after closing the scanner, and serializes repeated scans. Pickup actions wait for server-confirmed listing and matching request snapshots; load failures have a retry action. Overdue open/assigned donations offer expiry reconciliation; already-expired records do not repeat that operation. Receipt labels describe recorded donor/recipient actions without claiming that storage handling or QR scanning was independently verified.
 
 Combined review verification: 63 mobile tests and 44 rules tests pass, together with lint, formatting, TypeScript and Android bundling. Native scanning and two-phone handover still require physical-device acceptance. Recipient pickup confirmation/history and admin/demo integration remain pending tasks.
+
+## Recipient pickup integration
+
+Recipient pickup details include the shared QR reference, signed-in confirmation/retraction, expiry reconciliation, release/cancellation and own collection receipts. Request-history filters operate on the current bounded page. Native two-phone acceptance is pending.
+
+Recipient PR review: pickup uses the shared real QR generator and preserves the original case-sensitive listing ID as the manual reference. Confirmation and expiry actions require the matching selected organization, valid pickup timing and confirmed server metadata; pending writes block actions and duplicate mutations are serialized. Collection receipts/history require both the matching request and parent listing to be collected for the current organization. A donation collected by another organization is labelled accordingly and is excluded from own collection history. Invalid windows and stale/future confirmations do not enable handover.
+
+Latest recipient integration checks: 71 mobile tests and 44 rules tests, mobile lint, formatting, TypeScript and Android bundling pass. Physical camera scanning, two-phone confirmation/collection and background/foreground behavior remain manual acceptance steps.

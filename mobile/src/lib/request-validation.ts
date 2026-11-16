@@ -1,6 +1,37 @@
 import type { Coordinates, FoodListing } from './listings';
 import type { DonationRequest } from './requests';
 
+export function isRecipientAssignment(
+  listing: FoodListing | null | undefined,
+  request: DonationRequest | null,
+  uid: string,
+): boolean {
+  if (!listing || !request || !uid) return false;
+  return (
+    listing.status === 'assigned' &&
+    request.status === 'approved' &&
+    listing.acceptedOrganizationUid === uid &&
+    request.organizationUid === uid &&
+    request.listingId === listing.id &&
+    request.providerUid === listing.providerUid
+  );
+}
+
+export function isRecipientCollection(
+  listing: FoodListing | null | undefined,
+  request: DonationRequest | null,
+  uid: string,
+): boolean {
+  if (!listing || !request || !uid) return false;
+  return (
+    listing.status === 'collected' &&
+    request.status === 'collected' &&
+    listing.acceptedOrganizationUid === uid &&
+    request.organizationUid === uid &&
+    request.listingId === listing.id &&
+    request.providerUid === listing.providerUid
+  );
+}
 export function formatDateText(date?: Date | null): string {
   if (!date) return '';
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -178,6 +209,20 @@ export function deriveRequestState(
     };
   }
 
+  if (
+    listing.status === 'collected' &&
+    listing.acceptedOrganizationUid &&
+    listing.acceptedOrganizationUid !== currentUid
+  ) {
+    return {
+      status: 'assigned_to_other',
+      label: 'Collected by Another Recipient',
+      tone: 'neutral',
+      description: 'This donation was collected by another organization.',
+      canWithdraw: false,
+      canRequest: false,
+    };
+  }
   // If listing is collected
   if (listing.status === 'collected' || request?.status === 'collected') {
     return {
@@ -305,4 +350,126 @@ export function deriveRequestState(
     canWithdraw: false,
     canRequest: true,
   };
+}
+
+export type PickupWindowStatus = 'before_start' | 'active' | 'elapsed';
+export type RecipientConfirmationStatus =
+  'not_confirmed' | 'confirmed_valid' | 'confirmed_stale';
+
+export interface RecipientPickupTiming {
+  windowStatus: PickupWindowStatus;
+  canConfirmHandover: boolean;
+  confirmationStatus: RecipientConfirmationStatus;
+  remainingConfirmationSeconds: number;
+  remainingWindowSeconds: number;
+  secondsUntilStart: number;
+  canReconcileExpiry: boolean;
+  cancellationEffect: 'open' | 'cancelled';
+}
+
+/**
+ * Computes live pickup timing and state for an assigned recipient.
+ */
+export function getRecipientPickupTiming(
+  listing: FoodListing,
+  request: DonationRequest | null,
+  now = new Date(),
+): RecipientPickupTiming {
+  const nowMs = now.getTime();
+  const startMs = listing.pickupStartsAt?.getTime() ?? NaN;
+  const deadlineMs = listing.pickupDeadline?.getTime() ?? NaN;
+  const validWindow =
+    [nowMs, startMs, deadlineMs].every(Number.isFinite) && startMs < deadlineMs;
+  const selected = isRecipientAssignment(
+    listing,
+    request,
+    request?.organizationUid ?? '',
+  );
+
+  let windowStatus: PickupWindowStatus = 'active';
+  if (!validWindow) windowStatus = 'elapsed';
+  else if (nowMs < startMs) {
+    windowStatus = 'before_start';
+  } else if (nowMs >= deadlineMs) {
+    windowStatus = 'elapsed';
+  }
+
+  const canConfirmHandover =
+    validWindow && windowStatus === 'active' && selected;
+
+  let confirmationStatus: RecipientConfirmationStatus = 'not_confirmed';
+  let remainingConfirmationSeconds = 0;
+
+  if (request?.recipientConfirmedAt) {
+    const confirmedMs = request.recipientConfirmedAt.getTime();
+    const expiryMs = confirmedMs + 5 * 60 * 1000;
+    if (
+      validWindow &&
+      selected &&
+      windowStatus === 'active' &&
+      Number.isFinite(confirmedMs) &&
+      confirmedMs >= startMs &&
+      nowMs <= expiryMs &&
+      confirmedMs <= nowMs
+    ) {
+      confirmationStatus = 'confirmed_valid';
+      remainingConfirmationSeconds = Math.max(
+        0,
+        Math.ceil((expiryMs - nowMs) / 1000),
+      );
+    } else {
+      confirmationStatus = 'confirmed_stale';
+      remainingConfirmationSeconds = 0;
+    }
+  }
+
+  const remainingWindowSeconds = Math.max(
+    0,
+    validWindow ? Math.ceil((deadlineMs - nowMs) / 1000) : 0,
+  );
+  const secondsUntilStart = Math.max(
+    0,
+    validWindow ? Math.ceil((startMs - nowMs) / 1000) : 0,
+  );
+
+  const canReconcileExpiry =
+    validWindow && windowStatus === 'elapsed' && selected;
+
+  const cancellationEffect =
+    nowMs + 15 * 60 * 1000 <= deadlineMs ? 'open' : 'cancelled';
+
+  return {
+    windowStatus,
+    canConfirmHandover,
+    confirmationStatus,
+    remainingConfirmationSeconds,
+    remainingWindowSeconds,
+    secondsUntilStart,
+    canReconcileExpiry,
+    cancellationEffect,
+  };
+}
+
+export function formatSecondsCountdown(totalSeconds: number): string {
+  const clamped = Number.isFinite(totalSeconds)
+    ? Math.max(0, Math.floor(totalSeconds))
+    : 0;
+  const minutes = Math.floor(clamped / 60);
+  const seconds = clamped % 60;
+  return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+}
+
+export function formatTimeSpan(totalSeconds: number): string {
+  const clamped = Number.isFinite(totalSeconds)
+    ? Math.max(0, Math.floor(totalSeconds))
+    : 0;
+  if (clamped < 60) return `${clamped}s`;
+  const minutes = Math.floor(clamped / 60);
+  if (minutes < 60) {
+    const sec = clamped % 60;
+    return sec > 0 ? `${minutes}m ${sec}s` : `${minutes}m`;
+  }
+  const hours = Math.floor(minutes / 60);
+  const remainingMin = minutes % 60;
+  return remainingMin > 0 ? `${hours}h ${remainingMin}m` : `${hours}h`;
 }
