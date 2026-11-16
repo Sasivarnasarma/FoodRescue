@@ -41,26 +41,6 @@ const palette = {
   redText: '#B91C1C',
 };
 
-const statusContent = {
-  pending: {
-    title: 'Awaiting verification',
-    message:
-      'An admin will review your organization profile. You can check their decision here.',
-    tone: 'warning',
-  },
-  approved: {
-    title: 'Organization approved',
-    message: 'Your organization is verified and eligible to request donations.',
-    tone: 'success',
-  },
-  rejected: {
-    title: 'Organization not approved',
-    message:
-      'Contact the FoodRescue project team for help with your application.',
-    tone: 'error',
-  },
-} as const;
-
 function readableError(error: unknown, fallback: string) {
   const code =
     error && typeof error === 'object' && 'code' in error ? error.code : null;
@@ -350,7 +330,7 @@ export function ProfileStatus({ uid, user }: { uid: string; user?: User }) {
     );
   }
 
-  if (result.state === 'approved' && result.confirmed) {
+  if (result.state === 'approved') {
     return (
       <View style={styles.appShell}>
         {/* Modern Top App Bar */}
@@ -359,7 +339,7 @@ export function ProfileStatus({ uid, user }: { uid: string; user?: User }) {
             <View style={styles.appHeaderLogoBadge}>
               <Text style={{ fontSize: 18 }}>🌱</Text>
             </View>
-            <View>
+            <View style={styles.appHeaderTexts}>
               <Text style={styles.appHeaderBrand}>FoodRescue</Text>
               <Text style={styles.appHeaderSub} numberOfLines={1}>
                 {result.name}
@@ -387,11 +367,26 @@ export function ProfileStatus({ uid, user }: { uid: string; user?: User }) {
 
         {/* Content Body */}
         <View style={styles.appBody}>
+          {!result.confirmed && (
+            <Message tone="warning">
+              Reconnecting. Showing saved details; donation actions are paused
+              until your account is confirmed.
+            </Message>
+          )}
+          {signOutError ? <Message tone="error">{signOutError}</Message> : null}
           {recipientTab === 'feed' && (
-            <RecipientFeed initialTab="feed" key="feed" />
+            <RecipientFeed
+              readOnly={!result.confirmed}
+              initialTab="feed"
+              key="feed"
+            />
           )}
           {recipientTab === 'requests' && (
-            <RecipientFeed initialTab="requests" key="requests" />
+            <RecipientFeed
+              readOnly={!result.confirmed}
+              initialTab="requests"
+              key="requests"
+            />
           )}
           {recipientTab === 'profile' && (
             <ScrollView contentContainerStyle={styles.profileTabContent}>
@@ -572,21 +567,7 @@ export function ProfileStatus({ uid, user }: { uid: string; user?: User }) {
     );
   }
 
-  const status = statusContent[result.state];
-  return (
-    <View style={styles.card}>
-      <Text style={styles.body}>{result.name}</Text>
-      <Text accessibilityRole="header" style={styles.heading}>
-        {status.title}
-      </Text>
-      <Message tone={status.tone}>{status.message}</Message>
-      {!result.confirmed ? (
-        <Message tone="warning">
-          Showing a saved status while we reconnect. It may have changed.
-        </Message>
-      ) : null}
-    </View>
-  );
+  return null;
 }
 
 function SignedIn({ user }: { user: User }) {
@@ -657,7 +638,7 @@ export default function OrganizationScreen() {
     content = <Loading label="Restoring your session…" />;
   } else if (user) {
     return (
-      <SafeAreaView edges={['top', 'left', 'right']} style={styles.appShell}>
+      <SafeAreaView style={styles.appShell}>
         <StatusBar style="dark" />
         <SignedIn user={user} key={user.uid} />
       </SafeAreaView>
@@ -705,6 +686,8 @@ const styles = StyleSheet.create({
   },
   appHeader: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
@@ -717,7 +700,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    flex: 1,
+    flexBasis: 160,
+    flexGrow: 1,
+    flexShrink: 1,
+  },
+  appHeaderTexts: {
+    flexShrink: 1,
   },
   appHeaderLogoBadge: {
     width: 34,
@@ -740,6 +728,8 @@ const styles = StyleSheet.create({
   },
   appHeaderRight: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    flexShrink: 1,
     alignItems: 'center',
     gap: 8,
   },
@@ -854,6 +844,7 @@ const styles = StyleSheet.create({
   },
   bottomTabItem: {
     flex: 1,
+    minWidth: 0,
     alignItems: 'center',
     paddingVertical: 6,
     borderRadius: 8,
@@ -870,6 +861,7 @@ const styles = StyleSheet.create({
     opacity: 1,
   },
   bottomTabLabel: {
+    textAlign: 'center',
     fontSize: 11,
     fontWeight: '600',
     color: '#64748B',

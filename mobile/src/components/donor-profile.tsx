@@ -279,8 +279,7 @@ export function DonorProfile({ user }: { user: User }) {
   const canManage =
     !error &&
     account?.data?.accountStatus === 'active' &&
-    profile?.data?.verificationStatus === 'approved' &&
-    !fromCache;
+    profile?.data?.verificationStatus === 'approved';
 
   if (canManage && profile?.data) {
     return (
@@ -291,7 +290,7 @@ export function DonorProfile({ user }: { user: User }) {
             <View style={styles.appHeaderLogoBadge}>
               <Text style={{ fontSize: 18 }}>🌱</Text>
             </View>
-            <View>
+            <View style={styles.appHeaderTexts}>
               <Text style={styles.appHeaderBrand}>FoodRescue</Text>
               <Text style={styles.appHeaderSub} numberOfLines={1}>
                 {profile.data.name}
@@ -317,6 +316,13 @@ export function DonorProfile({ user }: { user: User }) {
 
         {/* Content Body */}
         <View style={styles.appBody}>
+          {!!fromCache && (
+            <Text accessibilityLiveRegion="polite" style={styles.noticeBanner}>
+              Reconnecting. Your form stays open; saving and donation actions
+              are paused until your account is confirmed.
+            </Text>
+          )}
+          {!!message && <AccountError message={message} />}
           {!!notice && (
             <Text accessibilityLiveRegion="polite" style={styles.noticeBanner}>
               {notice}
@@ -325,6 +331,7 @@ export function DonorProfile({ user }: { user: User }) {
 
           {viewMode === 'create' && (
             <DonorListingForm
+              readOnly={!!fromCache}
               key={editing?.id ?? 'new'}
               initialListing={editing}
               onSuccess={() => {
@@ -337,6 +344,7 @@ export function DonorProfile({ user }: { user: User }) {
 
           {viewMode === 'requests' && selectedListing && (
             <DonorIncomingRequests
+              readOnly={!!fromCache}
               listing={selectedListing}
               onBack={() => setViewMode('feed')}
             />
@@ -344,6 +352,7 @@ export function DonorProfile({ user }: { user: User }) {
 
           {viewMode === 'pickup' && selectedListing && (
             <DonorPickupScreen
+              readOnly={!!fromCache}
               key={selectedListing.id}
               listing={selectedListing}
               onBack={() => setViewMode('feed')}
@@ -352,6 +361,7 @@ export function DonorProfile({ user }: { user: User }) {
 
           {viewMode === 'feed' && (
             <DonorListingsFeed
+              readOnly={!!fromCache}
               onCreatePress={() => {
                 setEditing(undefined);
                 setViewMode('create');
@@ -634,6 +644,8 @@ const styles = StyleSheet.create({
   },
   appHeader: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
@@ -646,7 +658,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    flex: 1,
+    flexBasis: 160,
+    flexGrow: 1,
+    flexShrink: 1,
+  },
+  appHeaderTexts: {
+    flexShrink: 1,
   },
   appHeaderLogoBadge: {
     width: 34,
@@ -669,6 +686,8 @@ const styles = StyleSheet.create({
   },
   appHeaderRight: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    flexShrink: 1,
     alignItems: 'center',
     gap: 8,
   },
@@ -791,6 +810,7 @@ const styles = StyleSheet.create({
   },
   bottomTabItem: {
     flex: 1,
+    minWidth: 0,
     alignItems: 'center',
     paddingVertical: 6,
     borderRadius: 8,
@@ -807,6 +827,7 @@ const styles = StyleSheet.create({
     opacity: 1,
   },
   bottomTabLabel: {
+    textAlign: 'center',
     fontSize: 11,
     fontWeight: '600',
     color: '#64748B',

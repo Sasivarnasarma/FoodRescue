@@ -33,11 +33,13 @@ import {
 } from '@/lib/requests';
 
 export interface DonorIncomingRequestsProps {
+  readOnly?: boolean;
   listing: FoodListing;
   onBack: () => void;
 }
 
 export function DonorIncomingRequests({
+  readOnly = false,
   listing: initialListing,
   onBack,
 }: DonorIncomingRequestsProps) {
@@ -139,6 +141,7 @@ export function DonorIncomingRequests({
     page?.hasPendingWrites || live?.hasPendingWrites,
   );
   const approvalsBlocked =
+    readOnly ||
     !live?.listing ||
     !page ||
     !!live.error ||

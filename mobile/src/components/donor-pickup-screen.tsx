@@ -31,12 +31,14 @@ import {
 } from '@/lib/requests';
 
 export interface DonorPickupScreenProps {
+  readOnly?: boolean;
   listing: FoodListing;
   onBack: () => void;
   onDonationUpdated?: () => void;
 }
 
 export function DonorPickupScreen({
+  readOnly = false,
   listing: initialListing,
   onBack,
   onDonationUpdated,
@@ -174,6 +176,7 @@ export function DonorPickupScreen({
       !requestMeta.hasPendingWrites &&
       !requestError);
   const actionsBlocked =
+    readOnly ||
     loading ||
     !listingReady ||
     !requestReady ||

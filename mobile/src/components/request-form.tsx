@@ -12,6 +12,10 @@ import type { Coordinates, FoodListing } from '../lib/listings';
 import { submitDonationRequest } from '../lib/requests';
 import { localDateText, parseLocalDate } from '../lib/listing-form-validation';
 import {
+  getQuickPickupTime,
+  type PickupTimeShortcut,
+} from '../lib/donation-ui';
+import {
   validateDepartureLocation,
   validatePickupProposal,
   validateStorageConfirmation,
@@ -51,15 +55,13 @@ export function RequestForm({
   const lock = useRef(false);
   // Compute initial proposed pickup time
   const [proposedText, setProposedText] = useState(() => {
-    const now = Date.now();
-    const startMillis = listing.pickupStartsAt?.getTime() ?? now;
-    const deadlineMillis = listing.pickupDeadline?.getTime() ?? now + 3600000;
-
-    const targetMillis = Math.min(
-      Math.floor(deadlineMillis / 60000) * 60000,
-      Math.ceil(Math.max(startMillis, now + 5 * 60000) / 60000) * 60000,
+    return localDateText(
+      getQuickPickupTime(
+        'start',
+        listing.pickupStartsAt,
+        listing.pickupDeadline,
+      ),
     );
-    return localDateText(new Date(targetMillis));
   });
 
   const [confirmedStorage, setConfirmedStorage] = useState(false);
@@ -67,23 +69,17 @@ export function RequestForm({
   const [errorMessage, setErrorMessage] = useState('');
   const [submitted, setSubmitted] = useState(false);
 
-  const setQuickTime = (type: 'start' | 'mid' | 'beforeDeadline') => {
-    const now = Date.now();
-    const startMillis = listing.pickupStartsAt?.getTime() ?? now;
-    const deadlineMillis = listing.pickupDeadline?.getTime() ?? now + 3600000;
-
-    let chosenMillis = now;
-    if (type === 'start') {
-      chosenMillis = Math.max(startMillis, now + 5 * 60 * 1000);
-    } else if (type === 'mid') {
-      const windowStart = Math.max(startMillis, now);
-      chosenMillis = windowStart + (deadlineMillis - windowStart) / 2;
-    } else {
-      chosenMillis = deadlineMillis - 30 * 60 * 1000; // 30 mins before deadline
+  const setQuickTime = (type: PickupTimeShortcut) => {
+    const chosen = getQuickPickupTime(
+      type,
+      listing.pickupStartsAt,
+      listing.pickupDeadline,
+    );
+    if (!chosen) {
+      setErrorMessage('No future minute is available in this pickup window.');
+      return;
     }
-
-    if (chosenMillis <= now) chosenMillis = now + 10 * 60 * 1000;
-    setProposedText(localDateText(new Date(chosenMillis)));
+    setProposedText(localDateText(chosen));
     setErrorMessage('');
   };
 
@@ -343,10 +339,13 @@ const styles = StyleSheet.create({
   },
   quickButtonsRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
     marginTop: 4,
   },
   quickButton: {
+    maxWidth: '100%',
+    flexShrink: 1,
     paddingHorizontal: 10,
     paddingVertical: 6,
     backgroundColor: colors.surfaceSubtle,

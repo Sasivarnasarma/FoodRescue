@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -32,11 +33,13 @@ import {
   type Coordinates,
 } from '../lib/listings';
 interface Props {
+  readOnly?: boolean;
   initialListing?: FoodListing;
   onSuccess: () => void;
   onCancel: () => void;
 }
 export function DonorListingForm({
+  readOnly = false,
   initialListing: initial,
   onSuccess,
   onCancel,
@@ -74,6 +77,7 @@ export function DonorListingForm({
   const [useBy, setUseBy] = useState(localDateText(initial?.useByAt));
   const [photo, setPhoto] = useState<CompressedPhotoResult | null>(null);
   const [photoChanged, setPhotoChanged] = useState(false);
+  const [photoProcessing, setPhotoProcessing] = useState(false);
   const [photoLoading, setPhotoLoading] = useState(!!initial);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -107,7 +111,7 @@ export function DonorListingForm({
     };
   }, [initial]);
   async function save(publish: boolean) {
-    if (locked.current) return;
+    if (locked.current || readOnly || photoProcessing || photoLoading) return;
     locked.current = true;
     setError('');
     try {
@@ -208,7 +212,11 @@ export function DonorListingForm({
   }
 
   return (
-    <View style={styles.container}>
+    <ScrollView
+      style={styles.scroll}
+      contentContainerStyle={styles.container}
+      keyboardShouldPersistTaps="handled"
+    >
       <View style={styles.header}>
         <Text accessibilityRole="header" style={styles.title}>
           {initial ? 'Edit draft' : 'New donation'}
@@ -241,7 +249,7 @@ export function DonorListingForm({
         />
         {choices('Category', FOOD_CATEGORIES, category, setCategory)}
         <View style={styles.quantityRow}>
-          <View style={{ flex: 1 }}>
+          <View style={styles.quantityColumn}>
             <AccountField
               label="Whole quantity"
               value={quantity}
@@ -250,7 +258,7 @@ export function DonorListingForm({
               editable={!busy}
             />
           </View>
-          <View style={{ flex: 1 }}>
+          <View style={styles.quantityColumn}>
             {choices(
               'Unit',
               ['pack', 'portion', 'item', 'g'] as const,
@@ -347,6 +355,7 @@ export function DonorListingForm({
           <ActivityIndicator accessibilityLabel="Loading photo" />
         ) : (
           <PhotoAttachmentCard
+            onProcessingChange={setPhotoProcessing}
             photo={photo}
             onPhotoSelected={(value) => {
               setPhoto(value);
@@ -360,13 +369,13 @@ export function DonorListingForm({
       <View style={styles.actionGroup}>
         <AccountButton
           label={busy ? 'Publishing…' : 'Publish donation'}
-          disabled={busy || photoLoading}
+          disabled={busy || photoLoading || photoProcessing || readOnly}
           onPress={() => void save(true)}
         />
         <AccountButton
           label={busy ? 'Saving…' : 'Save draft'}
           secondary
-          disabled={busy || photoLoading}
+          disabled={busy || photoLoading || photoProcessing || readOnly}
           onPress={() => void save(false)}
         />
         <AccountButton
@@ -376,13 +385,17 @@ export function DonorListingForm({
           onPress={onCancel}
         />
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
+  scroll: {
+    flex: 1,
+  },
   container: {
     gap: 16,
+    paddingBottom: 24,
   },
   header: {
     marginBottom: 4,
@@ -435,6 +448,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   choiceChip: {
+    maxWidth: '100%',
     backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: '#CBD5E1',
@@ -457,8 +471,14 @@ const styles = StyleSheet.create({
   },
   quantityRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 12,
     alignItems: 'flex-start',
+  },
+  quantityColumn: {
+    flexBasis: 140,
+    flexGrow: 1,
+    flexShrink: 1,
   },
   helperNoteBox: {
     backgroundColor: '#EFF6FF',

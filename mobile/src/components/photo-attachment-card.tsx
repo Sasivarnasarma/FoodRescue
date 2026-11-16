@@ -17,12 +17,14 @@ import {
 interface PhotoAttachmentCardProps {
   photo: CompressedPhotoResult | null;
   onPhotoSelected: (photo: CompressedPhotoResult | null) => void;
+  onProcessingChange?: (processing: boolean) => void;
   disabled?: boolean;
 }
 
 export function PhotoAttachmentCard({
   photo,
   onPhotoSelected,
+  onProcessingChange,
   disabled = false,
 }: PhotoAttachmentCardProps) {
   const picking = useRef(false);
@@ -35,6 +37,7 @@ export function PhotoAttachmentCard({
     try {
       setErrorMessage(null);
       setCompressing(true);
+      onProcessingChange?.(true);
       const result = await capturePhotoFromCamera();
       if (result) {
         onPhotoSelected(result);
@@ -46,6 +49,7 @@ export function PhotoAttachmentCard({
     } finally {
       picking.current = false;
       setCompressing(false);
+      onProcessingChange?.(false);
     }
   };
 
@@ -55,6 +59,7 @@ export function PhotoAttachmentCard({
     try {
       setErrorMessage(null);
       setCompressing(true);
+      onProcessingChange?.(true);
       const result = await pickPhotoFromGallery();
       if (result) {
         onPhotoSelected(result);
@@ -66,6 +71,7 @@ export function PhotoAttachmentCard({
     } finally {
       picking.current = false;
       setCompressing(false);
+      onProcessingChange?.(false);
     }
   };
 
