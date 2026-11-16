@@ -282,22 +282,28 @@ test('eligibility checks enforce storage requirement, state, and 15-minute cutof
 
   // 8. 15-minute lead-time cutoff: 14 mins fails, exactly 15 mins passes
   const req14mins = createMockRequest({
-    plannedPickupAt: new Date('2026-11-15T11:46:00Z'), // 14 mins before 12:00
+    plannedPickupAt: new Date('2026-11-15T11:50:00Z'), // valid proposal; approval is too late
     canMeetStorageRequirement: true,
     status: 'requested',
   });
-  const res14 = checkRequestEligibility(listing, req14mins, now);
-  assert.equal(res14.isEligible, false);
-  assert.ok(
-    res14.reasons.some((r) => r.includes('at least 15 minutes required')),
+  const res14 = checkRequestEligibility(
+    listing,
+    req14mins,
+    new Date('2026-11-15T11:46:00Z'),
   );
+  assert.equal(res14.isEligible, false);
+  assert.ok(res14.reasons.some((r) => r.includes('at least 15 minutes')));
 
   const req15mins = createMockRequest({
-    plannedPickupAt: new Date('2026-11-15T11:45:00Z'), // exactly 15 mins before 12:00
+    plannedPickupAt: new Date('2026-11-15T11:50:00Z'), // five-minute proposal buffer remains valid
     canMeetStorageRequirement: true,
     status: 'requested',
   });
-  const res15 = checkRequestEligibility(listing, req15mins, now);
+  const res15 = checkRequestEligibility(
+    listing,
+    req15mins,
+    new Date('2026-11-15T11:45:00Z'),
+  );
   assert.equal(res15.isEligible, true);
 });
 
@@ -509,4 +515,45 @@ test('listing urgency reflects deadline proximity independently of requests', ()
     pickupDeadline: new Date('2026-11-15T09:50:00Z'),
   });
   assert.equal(getListingUrgency(expiredListing, now).urgencyLevel, 'expired');
+});
+
+test('short pickup buffers stay eligible while approval time obeys the server cutoff', () => {
+  const now = new Date('2026-11-15T10:00:00Z');
+  const listing = createMockListing({
+    pickupStartsAt: now,
+    pickupDeadline: new Date('2026-11-15T12:00:00Z'),
+  });
+  const request = createMockRequest({
+    plannedPickupAt: new Date('2026-11-15T11:50:00Z'),
+  });
+  assert.equal(checkRequestEligibility(listing, request, now).isEligible, true);
+  assert.equal(
+    checkRequestEligibility(listing, request, new Date('2026-11-15T11:45:00Z'))
+      .isEligible,
+    true,
+  );
+  assert.equal(
+    checkRequestEligibility(
+      listing,
+      request,
+      new Date('2026-11-15T11:45:00.001Z'),
+    ).isEligible,
+    false,
+  );
+  assert.equal(
+    checkRequestEligibility(
+      listing,
+      { ...request, plannedPickupAt: new Date(NaN) },
+      now,
+    ).isEligible,
+    false,
+  );
+  assert.equal(
+    checkRequestEligibility(
+      { ...listing, pickupStartsAt: undefined },
+      request,
+      now,
+    ).isEligible,
+    false,
+  );
 });

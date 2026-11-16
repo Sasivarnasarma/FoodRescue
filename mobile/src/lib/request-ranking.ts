@@ -128,11 +128,18 @@ export function checkRequestEligibility(
       reasons.push('Proposed pickup time is after the pickup deadline.');
     }
 
-    const bufferMinutes = (deadlineMs - plannedMs) / (60 * 1000);
-    if (bufferMinutes < MIN_LEAD_TIME_MINUTES) {
-      const displayMinutes = Math.max(0, Math.floor(bufferMinutes));
+    if (
+      !Number.isFinite(deadlineMs) ||
+      !Number.isFinite(plannedMs) ||
+      !Number.isFinite(currentMs) ||
+      !listing.pickupStartsAt ||
+      !Number.isFinite(listing.pickupStartsAt.getTime())
+    ) {
+      reasons.push('Valid pickup window and proposal timestamps are required.');
+    }
+    if (currentMs + MIN_LEAD_TIME_MINUTES * 60_000 > deadlineMs) {
       reasons.push(
-        `Proposed pickup leaves ${displayMinutes} minutes before the deadline; at least ${MIN_LEAD_TIME_MINUTES} minutes required.`,
+        `Approval requires at least ${MIN_LEAD_TIME_MINUTES} minutes before the deadline.`,
       );
     }
   }
@@ -469,13 +476,13 @@ export function explainRankingComparison(
     first.breakdown.totalScore !== null &&
     second.breakdown.totalScore === null
   ) {
-    return `${first.request.organizationName || first.request.organizationUid} has verified departure coordinates and a total score of ${first.breakdown.totalScore}, while ${second.request.organizationName || second.request.organizationUid} did not provide coordinates and requires manual assessment.`;
+    return `${first.request.organizationName || first.request.organizationUid} has organization-supplied departure coordinates and a total score of ${first.breakdown.totalScore}, while ${second.request.organizationName || second.request.organizationUid} did not provide coordinates and requires manual assessment.`;
   }
   if (
     first.breakdown.totalScore === null &&
     second.breakdown.totalScore !== null
   ) {
-    return `${second.request.organizationName || second.request.organizationUid} has verified departure coordinates and a total score of ${second.breakdown.totalScore}, while ${first.request.organizationName || first.request.organizationUid} requires manual assessment.`;
+    return `${second.request.organizationName || second.request.organizationUid} has organization-supplied departure coordinates and a total score of ${second.breakdown.totalScore}, while ${first.request.organizationName || first.request.organizationUid} requires manual assessment.`;
   }
 
   const scoreA = first.breakdown.totalScore ?? 0;
