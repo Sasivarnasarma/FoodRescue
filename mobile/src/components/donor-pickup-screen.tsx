@@ -288,15 +288,17 @@ export function DonorPickupScreen({
             setBusyAction('close');
             setErrorMessage(null);
             try {
-              await cancelApprovedDonation(listing.id, assignedOrgUid, 'close');
+              await cancelApprovedDonation(
+                listing.id,
+                assignedOrgUid,
+                'close',
+              );
               setSuccessNotice('Donation has been closed and cancelled.');
               onDonationUpdated?.();
             } catch (err) {
               const msg = accountErrorMessage(
                 err,
-                err instanceof Error
-                  ? err.message
-                  : 'Failed to close donation.',
+                err instanceof Error ? err.message : 'Failed to close donation.',
               );
               setErrorMessage(msg);
               Alert.alert('Action Failed', msg);
@@ -429,8 +431,7 @@ export function DonorPickupScreen({
         <View style={styles.detailsRow}>
           <Text style={styles.metaLabel}>Pickup Window:</Text>
           <Text style={styles.metaValue}>
-            {formatTime(listing.pickupStartsAt)} -{' '}
-            {formatDate(listing.pickupDeadline)}
+            {formatTime(listing.pickupStartsAt)} - {formatDate(listing.pickupDeadline)}
           </Text>
         </View>
 
@@ -523,7 +524,8 @@ export function DonorPickupScreen({
           <View style={styles.recipientCard}>
             <Text style={styles.sectionHeader}>Assigned Recipient</Text>
             <Text style={styles.recipientName}>
-              {request?.organizationName || `Organization (${assignedOrgUid})`}
+              {request?.organizationName ||
+                `Organization (${assignedOrgUid})`}
             </Text>
             <Text style={styles.recipientUid}>UID: {assignedOrgUid}</Text>
 
@@ -572,8 +574,7 @@ export function DonorPickupScreen({
                 <Text
                   style={[
                     styles.statusPillText,
-                    eligibility.status === 'ready' &&
-                      styles.statusPillReadyText,
+                    eligibility.status === 'ready' && styles.statusPillReadyText,
                     eligibility.status === 'awaiting_confirmation' &&
                       styles.statusPillAwaitingText,
                     eligibility.status === 'expired_confirmation' &&
@@ -608,8 +609,7 @@ export function DonorPickupScreen({
 
             {request?.recipientConfirmedAt && (
               <Text style={styles.confirmedTimestampText}>
-                Recipient confirmed at:{' '}
-                {formatTime(request.recipientConfirmedAt)}
+                Recipient confirmed at: {formatTime(request.recipientConfirmedAt)}
               </Text>
             )}
           </View>
@@ -704,8 +704,7 @@ export function DonorPickupScreen({
         <View style={styles.card}>
           <Text style={styles.expiredTitle}>Donation Expired</Text>
           <Text style={styles.expiredBody}>
-            The pickup deadline ({formatDate(listing.pickupDeadline)}) has
-            elapsed.
+            The pickup deadline ({formatDate(listing.pickupDeadline)}) has elapsed.
           </Text>
           <TouchableOpacity
             style={styles.reconcileButton}
