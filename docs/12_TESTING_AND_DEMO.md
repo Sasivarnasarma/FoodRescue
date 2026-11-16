@@ -23,7 +23,37 @@
 5. During the pickup window show the QR on phone B, scan on phone A, confirm handover on phone B, and complete on phone A. Verify both show collected.
 6. Explain why the top-ranked organization was suggested and demonstrate a stale or repeated pickup being rejected.
 
-Rehearse using synthetic data, fresh pickup windows, valid clocks, working network and camera permissions. Use manual location/reference entry and the bundled image fallback if needed. A seeded competing request must be created with the actual listing ID and valid times before showing rankings. Test the scoring function and Firestore Rules locally before the live demo. This repository currently contains the plan and starter Firebase config.
+Rehearse using synthetic data, fresh pickup windows, valid clocks, working network and camera permissions. Use manual location/reference entry and the bundled image fallback if needed. A seeded competing request must be created with the actual listing ID and valid times before showing rankings. Test the scoring function and Firestore Rules locally before the live demo. The repository includes the mobile and admin clients, Firebase rules and automated tests. Physical two-phone acceptance remains a separate demo requirement.
+
+## Camera permission and mobile layout regression checks
+
+Run `pnpm --filter foodrescue-mobile test`, `pnpm --filter foodrescue-mobile lint`,
+`pnpm --filter foodrescue-mobile typecheck`, and
+`pnpm --filter foodrescue-mobile format:check --end-of-line auto` from the root.
+The formatting option respects this Windows checkout's existing line endings.
+
+On Android, check the following before the team demo:
+
+1. Open Scan / Lookup with camera access already allowed. The camera should appear
+   without sending you to Settings.
+2. Deny camera access, then allow it in device Settings while the scanner stays
+   open. Return to FoodRescue: the scanner must refresh permission and show the
+   camera. Repeat with access revoked: the permission fallback must reappear.
+3. With permission still requestable, use Grant Camera Access. With permission
+   permanently denied, use Open Device Settings. Manual reference entry must work
+   in either case. Scan a recipient QR and verify normal donation lookup.
+4. At logical widths of 320, 360 and 412, and with Android's large font/display
+   settings, check Your Donations with empty and populated pages. Scan / Lookup,
+   New Offer, card actions and pagination must stay reachable without horizontal
+   clipping. Headings and actions can wrap onto separate rows.
+5. Scroll the donation form to Publish donation, Save draft and Cancel. Open the
+   scanner in landscape, focus manual entry and scroll to Verify Reference.
+   Check that scanner content and bottom tabs clear the system bars with both
+   gesture navigation and three-button navigation.
+
+Permission lifecycle tests use controlled native API responses. Actual camera,
+keyboard, font scaling and system-bar behavior still require physical-device
+verification. These fixes require no Firebase console or rules changes.
 
 ## Recipient donation detail regression check
 

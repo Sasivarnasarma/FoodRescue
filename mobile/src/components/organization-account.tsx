@@ -359,7 +359,7 @@ export function ProfileStatus({ uid, user }: { uid: string; user?: User }) {
             <View style={styles.appHeaderLogoBadge}>
               <Text style={{ fontSize: 18 }}>🌱</Text>
             </View>
-            <View>
+            <View style={styles.appHeaderTexts}>
               <Text style={styles.appHeaderBrand}>FoodRescue</Text>
               <Text style={styles.appHeaderSub} numberOfLines={1}>
                 {result.name}
@@ -657,7 +657,7 @@ export default function OrganizationScreen() {
     content = <Loading label="Restoring your session…" />;
   } else if (user) {
     return (
-      <SafeAreaView edges={['top', 'left', 'right']} style={styles.appShell}>
+      <SafeAreaView style={styles.appShell}>
         <StatusBar style="dark" />
         <SignedIn user={user} key={user.uid} />
       </SafeAreaView>
@@ -705,6 +705,8 @@ const styles = StyleSheet.create({
   },
   appHeader: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
@@ -717,7 +719,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    flex: 1,
+    flexBasis: 160,
+    flexGrow: 1,
+    flexShrink: 1,
+  },
+  appHeaderTexts: {
+    flexShrink: 1,
   },
   appHeaderLogoBadge: {
     width: 34,
@@ -740,6 +747,8 @@ const styles = StyleSheet.create({
   },
   appHeaderRight: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    flexShrink: 1,
     alignItems: 'center',
     gap: 8,
   },
@@ -854,6 +863,7 @@ const styles = StyleSheet.create({
   },
   bottomTabItem: {
     flex: 1,
+    minWidth: 0,
     alignItems: 'center',
     paddingVertical: 6,
     borderRadius: 8,
@@ -870,6 +880,7 @@ const styles = StyleSheet.create({
     opacity: 1,
   },
   bottomTabLabel: {
+    textAlign: 'center',
     fontSize: 11,
     fontWeight: '600',
     color: '#64748B',

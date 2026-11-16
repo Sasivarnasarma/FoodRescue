@@ -81,12 +81,26 @@ export function useDevicePermission(kind: DevicePermission) {
   }
 
   async function openSettings() {
+    if (requesting.current) return;
+    requesting.current = true;
+    setBusy(true);
+    setError('');
     try {
-      await Linking.openSettings();
+      // Recheck before sending someone to Settings: access may already have
+      // changed while the app was in the background.
+      const current = await api.read();
+      setPermission(current);
+      if (!current.granted) {
+        if (current.canAskAgain) setPermission(await api.request());
+        else await Linking.openSettings();
+      }
     } catch {
       setError(
         'Open the Settings app and update FoodRescue permissions there.',
       );
+    } finally {
+      requesting.current = false;
+      setBusy(false);
     }
   }
 

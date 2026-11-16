@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -277,9 +278,9 @@ export function DonorListingsFeed({
   }
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
       <View style={styles.topBar}>
-        <View>
+        <View style={styles.topBarHeading}>
           <Text style={styles.feedTitle}>Your Donations</Text>
           <Text style={styles.feedSubtitle}>
             Manage your surplus food listings
@@ -395,7 +396,7 @@ export function DonorListingsFeed({
           </Text>
         </TouchableOpacity>
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
@@ -417,6 +418,8 @@ const styles = StyleSheet.create({
   },
   topBar: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
@@ -424,6 +427,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
+  },
+  topBarHeading: {
+    flexBasis: 220,
+    flexGrow: 1,
+    flexShrink: 1,
   },
   feedTitle: {
     fontSize: 20,
@@ -437,6 +445,8 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   createButton: {
+    maxWidth: '100%',
+    flexShrink: 1,
     backgroundColor: '#167044',
     paddingHorizontal: 14,
     paddingVertical: 9,
@@ -448,6 +458,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   createButtonText: {
+    textAlign: 'center',
     color: '#ffffff',
     fontSize: 13,
     fontWeight: '700',
@@ -490,6 +501,8 @@ const styles = StyleSheet.create({
   },
   detailsRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingTop: 10,
@@ -550,6 +563,8 @@ const styles = StyleSheet.create({
   cardActions: {
     marginTop: 12,
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingTop: 10,
@@ -557,6 +572,8 @@ const styles = StyleSheet.create({
     borderTopColor: '#F1F5F9',
   },
   reviewRequestsButton: {
+    maxWidth: '100%',
+    flexShrink: 1,
     backgroundColor: '#E1F3E8',
     paddingVertical: 8,
     paddingHorizontal: 14,
@@ -568,6 +585,8 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   pickupButton: {
+    maxWidth: '100%',
+    flexShrink: 1,
     backgroundColor: '#167044',
     paddingVertical: 8,
     paddingHorizontal: 14,
@@ -597,11 +616,17 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   topBarButtons: {
+    flexBasis: 220,
+    flexGrow: 1,
+    flexShrink: 1,
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: 8,
   },
   scanButton: {
+    maxWidth: '100%',
+    flexShrink: 1,
     backgroundColor: '#ffffff',
     paddingVertical: 9,
     paddingHorizontal: 12,
@@ -610,6 +635,7 @@ const styles = StyleSheet.create({
     borderColor: '#CBD5E1',
   },
   scanButtonText: {
+    textAlign: 'center',
     color: '#334155',
     fontSize: 13,
     fontWeight: '600',
@@ -655,6 +681,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   emptyCta: {
+    maxWidth: '100%',
     backgroundColor: '#167044',
     paddingVertical: 12,
     paddingHorizontal: 20,
@@ -666,6 +693,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   emptyCtaText: {
+    textAlign: 'center',
     color: '#ffffff',
     fontSize: 14,
     fontWeight: '700',
@@ -712,6 +740,8 @@ const styles = StyleSheet.create({
   },
   paginationBar: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,

@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   AppState,
-  Linking,
   Platform,
   StyleSheet,
   Text,
@@ -10,7 +9,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import { CameraView } from 'expo-camera';
+import { useDevicePermission } from '../hooks/use-device-permission';
 import { parsePickupReference, type QrParseResult } from '../lib/qr-service';
 
 export interface QrScannerCardProps {
@@ -28,7 +28,13 @@ export function QrScannerCard({
   title = 'Scan Pickup QR',
   expectedListingId,
 }: QrScannerCardProps) {
-  const [permission, requestPermission] = useCameraPermissions();
+  const {
+    permission,
+    busy: permissionBusy,
+    error: permissionError,
+    request: requestPermission,
+    openSettings,
+  } = useDevicePermission('camera');
   const [activeTab, setActiveTab] = useState<'camera' | 'manual'>('camera');
   const [manualInput, setManualInput] = useState('');
   const [error, setError] = useState('');
@@ -106,14 +112,6 @@ export function QrScannerCard({
     setError('');
   };
 
-  const handleOpenSettings = async () => {
-    try {
-      await Linking.openSettings();
-    } catch {
-      setError('Open device Settings manually to grant camera access.');
-    }
-  };
-
   return (
     <View style={styles.card}>
       <View style={styles.headerRow}>
@@ -181,14 +179,14 @@ export function QrScannerCard({
       {/* Camera Scanner View */}
       {activeTab === 'camera' && !disabled && !scannedId && foreground ? (
         <View style={styles.cameraWrapper}>
-          {!permission ? (
+          {!permission && !permissionError ? (
             <View style={styles.permissionPlaceholder}>
               <ActivityIndicator size="small" color="#167044" />
               <Text style={styles.placeholderText}>
                 Checking camera permission…
               </Text>
             </View>
-          ) : !permission.granted ? (
+          ) : !permission?.granted ? (
             <View style={styles.permissionPlaceholder}>
               <Text style={styles.permissionTitle}>Camera Access Required</Text>
               <Text style={styles.permissionBody}>
@@ -196,17 +194,12 @@ export function QrScannerCard({
                 QR code.
               </Text>
 
-              {permission.canAskAgain ? (
+              {!permission || permission.canAskAgain ? (
                 <TouchableOpacity
                   accessibilityRole="button"
                   style={styles.actionButton}
-                  onPress={() => {
-                    void requestPermission().catch(() =>
-                      setError(
-                        'Could not request camera access. Enter the reference manually.',
-                      ),
-                    );
-                  }}
+                  disabled={permissionBusy}
+                  onPress={() => void requestPermission()}
                 >
                   <Text style={styles.actionButtonText}>
                     Grant Camera Access
@@ -216,7 +209,8 @@ export function QrScannerCard({
                 <TouchableOpacity
                   accessibilityRole="button"
                   style={styles.actionButton}
-                  onPress={() => void handleOpenSettings()}
+                  disabled={permissionBusy}
+                  onPress={() => void openSettings()}
                 >
                   <Text style={styles.actionButtonText}>
                     Open Device Settings
@@ -313,6 +307,11 @@ export function QrScannerCard({
       ) : null}
 
       {/* Error Banner */}
+      {permissionError ? (
+        <Text accessibilityRole="alert" style={styles.errorText}>
+          {permissionError}
+        </Text>
+      ) : null}
       {error ? (
         <View style={styles.errorBanner}>
           <Text style={styles.errorText}>{error}</Text>
@@ -343,10 +342,13 @@ const styles = StyleSheet.create({
   },
   headerRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
     justifyContent: 'space-between',
     alignItems: 'center',
   },
   title: {
+    flexShrink: 1,
     fontSize: 17,
     fontWeight: '800',
     color: '#0f172a',
@@ -369,6 +371,7 @@ const styles = StyleSheet.create({
   },
   tabButton: {
     flex: 1,
+    minWidth: 0,
     paddingVertical: 8,
     alignItems: 'center',
     borderRadius: 8,
@@ -382,6 +385,7 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   tabText: {
+    textAlign: 'center',
     fontSize: 13,
     fontWeight: '600',
     color: '#64748b',
@@ -507,6 +511,7 @@ const styles = StyleSheet.create({
     color: '#0f172a',
   },
   actionButton: {
+    maxWidth: '100%',
     backgroundColor: '#167044',
     paddingVertical: 12,
     paddingHorizontal: 16,
@@ -515,6 +520,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   actionButtonText: {
+    textAlign: 'center',
     color: '#ffffff',
     fontSize: 14,
     fontWeight: '700',
@@ -533,6 +539,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   successBanner: {
+    flexWrap: 'wrap',
+    gap: 8,
     backgroundColor: '#dcfce7',
     borderWidth: 1,
     borderColor: '#86efac',

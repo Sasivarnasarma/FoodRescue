@@ -47,7 +47,7 @@ export default function HomeScreen() {
 
   if (user) {
     return (
-      <SafeAreaView edges={['top', 'left', 'right']} style={styles.appShell}>
+      <SafeAreaView style={styles.appShell}>
         <AccountProfile key={user.uid} user={user} />
       </SafeAreaView>
     );
