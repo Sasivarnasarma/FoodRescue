@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -7,6 +7,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { DepartureLocationCard } from './departure-location-card';
 import type { Coordinates, FoodListing } from '../lib/listings';
 import { submitDonationRequest } from '../lib/requests';
 import { localDateText, parseLocalDate } from '../lib/listing-form-validation';
@@ -20,6 +21,7 @@ interface RequestFormProps {
   listing: FoodListing;
   departureLocation: Coordinates | null;
   onSuccess?: () => void;
+  disabled?: boolean;
 }
 
 const colors = {
@@ -43,18 +45,20 @@ export function RequestForm({
   listing,
   departureLocation,
   onSuccess,
+  disabled = false,
 }: RequestFormProps) {
+  const [selectedDeparture, setSelectedDeparture] = useState(departureLocation);
+  const lock = useRef(false);
   // Compute initial proposed pickup time
   const [proposedText, setProposedText] = useState(() => {
     const now = Date.now();
     const startMillis = listing.pickupStartsAt?.getTime() ?? now;
     const deadlineMillis = listing.pickupDeadline?.getTime() ?? now + 3600000;
 
-    let targetMillis = Math.max(startMillis, now + 15 * 60 * 1000);
-    // If target is beyond deadline or within 15 min of deadline, set to 20 min before deadline
-    if (targetMillis >= deadlineMillis - 15 * 60 * 1000) {
-      targetMillis = Math.max(now + 60000, deadlineMillis - 20 * 60 * 1000);
-    }
+    const targetMillis = Math.min(
+      Math.floor(deadlineMillis / 60000) * 60000,
+      Math.ceil(Math.max(startMillis, now + 5 * 60000) / 60000) * 60000,
+    );
     return localDateText(new Date(targetMillis));
   });
 
@@ -84,7 +88,7 @@ export function RequestForm({
   };
 
   const handleSubmit = async () => {
-    if (submitting || submitted) return;
+    if (lock.current || submitting || submitted || disabled) return;
     setErrorMessage('');
 
     // 1. Parse date
@@ -119,19 +123,20 @@ export function RequestForm({
     }
 
     // 4. Validate departure location if present
-    const locationCheck = validateDepartureLocation(departureLocation);
+    const locationCheck = validateDepartureLocation(selectedDeparture);
     if (!locationCheck.valid) {
       setErrorMessage(locationCheck.error ?? 'Invalid departure location.');
       return;
     }
 
+    lock.current = true;
     setSubmitting(true);
     try {
       await submitDonationRequest({
         listingId: listing.id,
         plannedPickupAt: proposedDate,
         canMeetStorageRequirement: true,
-        departureLocation: departureLocation ?? undefined,
+        departureLocation: selectedDeparture ?? undefined,
       });
       setSubmitted(true);
       onSuccess?.();
@@ -142,6 +147,7 @@ export function RequestForm({
           : 'Could not submit your request. Check your connection and try again.',
       );
     } finally {
+      lock.current = false;
       setSubmitting(false);
     }
   };
@@ -174,7 +180,7 @@ export function RequestForm({
           }}
           placeholder="YYYY-MM-DD HH:mm"
           placeholderTextColor={colors.secondary}
-          editable={!submitting && !submitted}
+          editable={!submitting && !submitted && !disabled}
           autoCapitalize="none"
           autoCorrect={false}
         />
@@ -185,7 +191,7 @@ export function RequestForm({
             accessibilityRole="button"
             style={styles.quickButton}
             onPress={() => setQuickTime('start')}
-            disabled={submitting || submitted}
+            disabled={submitting || submitted || disabled}
           >
             <Text style={styles.quickButtonText}>At Start</Text>
           </Pressable>
@@ -193,7 +199,7 @@ export function RequestForm({
             accessibilityRole="button"
             style={styles.quickButton}
             onPress={() => setQuickTime('mid')}
-            disabled={submitting || submitted}
+            disabled={submitting || submitted || disabled}
           >
             <Text style={styles.quickButtonText}>Mid Window</Text>
           </Pressable>
@@ -201,7 +207,7 @@ export function RequestForm({
             accessibilityRole="button"
             style={styles.quickButton}
             onPress={() => setQuickTime('beforeDeadline')}
-            disabled={submitting || submitted}
+            disabled={submitting || submitted || disabled}
           >
             <Text style={styles.quickButtonText}>30m Before End</Text>
           </Pressable>
@@ -223,7 +229,7 @@ export function RequestForm({
           accessibilityState={{ checked: confirmedStorage }}
           style={styles.checkboxRow}
           onPress={() => {
-            if (!submitting && !submitted) {
+            if (!submitting && !submitted && !disabled) {
               setConfirmedStorage((c) => !c);
               if (errorMessage) setErrorMessage('');
             }
@@ -244,15 +250,12 @@ export function RequestForm({
         </Pressable>
       </View>
 
-      {/* Departure point note */}
-      <View style={styles.locationNoteBox}>
-        <Text style={styles.locationNote}>
-          {departureLocation
-            ? `Departure coordinates for distance matching: ${departureLocation.latitude.toFixed(4)}, ${departureLocation.longitude.toFixed(4)}`
-            : 'No departure GPS coordinates supplied (optional).'}
-        </Text>
-      </View>
-
+      <DepartureLocationCard
+        departureLocation={selectedDeparture}
+        pickupLocation={listing.pickupLocation}
+        disabled={submitting || submitted || disabled}
+        onLocationChange={(location) => setSelectedDeparture(location)}
+      />
       {/* Error state */}
       {errorMessage ? (
         <View style={styles.errorBox}>
@@ -272,12 +275,12 @@ export function RequestForm({
       {/* Submit Action */}
       <Pressable
         accessibilityRole="button"
-        accessibilityState={{ disabled: submitting || submitted }}
-        disabled={submitting || submitted}
+        accessibilityState={{ disabled: submitting || submitted || disabled }}
+        disabled={submitting || submitted || disabled}
         onPress={handleSubmit}
         style={({ pressed }) => [
           styles.submitButton,
-          (submitting || submitted) && styles.disabledButton,
+          (submitting || submitted || disabled) && styles.disabledButton,
           pressed && styles.pressedButton,
         ]}
       >

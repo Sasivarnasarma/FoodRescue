@@ -68,9 +68,11 @@ Wait for the request-history collection-group index to build. Deployment was not
 ## Recipient requests implementation (Member 2)
 
 Member 2 implemented the mobile recipient request flow:
-- `mobile/src/lib/request-validation.ts`: pure functions for client-side validation of proposed pickup time (must be in the future, inside pickup window, at least 15 minutes before deadline), affirmative storage confirmation, optional departure coordinates, and real-time derived state calculation.
+- `mobile/src/lib/request-validation.ts`: pure functions for client-side validation of proposed pickup time (not in the past and inside the window; submission must be at least 15 minutes before deadline), affirmative storage confirmation, optional departure coordinates, and real-time derived state calculation.
 - `mobile/src/components/request-form.tsx`: whole-listing request form embedded in listing detail. Includes pickup time proposal with quick selectors, affirmative storage requirement confirmation, optional departure GPS coordinates, client-side validation, loading spinner, and retryable error handling.
 - `mobile/src/components/request-status-card.tsx`: displays the live status of the organization's request on the listing detail sheet. Distinguishes pending approval, approved assignment (with Phase 4 QR handover advisory), withdrawal status, assignment to another organization derived from parent listing status, and listing cancellation/expiry. Provides direct withdrawal action with confirmation dialog.
 - `mobile/src/components/organization-requests-view.tsx`: dedicated "My Requests" view subscribing to all requests for the signed-in organization via collection-group query, showing listing summary, status badges, proposed times, and withdrawal actions.
 - `mobile/src/components/recipient-feed.tsx`: top-level tab switcher between "Nearby Donations" and "My Requests", preserving navigation state and location settings.
 - `mobile/tests/recipient-requests.test.mjs`: unit tests for pickup proposal timing, storage confirmation, coordinate bounds, and derived state transitions.
+
+Review integration: the recipient form uses the shared departure card. Request history observes parent listings as well as request documents, supports bounded pages, and blocks mutations on cached or pending data. Expiry labels refresh while screens remain open; cancelled, collected and expired parents override stale approval displays. Physical-device acceptance is still pending.

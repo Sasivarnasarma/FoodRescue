@@ -236,3 +236,50 @@ test('deriveRequestState correctly models all recipient after-states and parent 
   assert.equal(stateClosing.canRequest, false);
   assert.match(stateClosing.description, /15 minutes/);
 });
+
+test('closed and elapsed parent states override an old approval', () => {
+  const now = new Date('2026-11-15T12:00:00Z');
+  const listing = {
+    status: 'assigned',
+    acceptedOrganizationUid: 'org',
+    pickupDeadline: new Date('2026-11-15T14:00:00Z'),
+  };
+  const request = { status: 'approved' };
+  assert.equal(
+    deriveRequestState(request, { ...listing, status: 'cancelled' }, 'org', now)
+      .status,
+    'cancelled',
+  );
+  assert.equal(
+    deriveRequestState(request, { ...listing, status: 'collected' }, 'org', now)
+      .status,
+    'collected',
+  );
+  assert.equal(
+    deriveRequestState(
+      request,
+      listing,
+      'org',
+      new Date('2026-11-15T14:00:00Z'),
+    ).status,
+    'expired',
+  );
+});
+
+test('proposal validation rejects missing or malformed pickup windows', () => {
+  const now = new Date('2026-11-15T12:00:00Z');
+  const proposed = new Date('2026-11-15T13:00:00Z');
+  assert.equal(
+    validatePickupProposal(
+      proposed,
+      undefined,
+      new Date('2026-11-15T14:00:00Z'),
+      now,
+    ).valid,
+    false,
+  );
+  assert.equal(
+    validatePickupProposal(proposed, now, new Date(NaN), now).valid,
+    false,
+  );
+});

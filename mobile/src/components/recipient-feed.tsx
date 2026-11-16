@@ -49,6 +49,7 @@ export function RecipientFeed() {
     id: string;
     listing: FoodListing | null;
     cached: boolean;
+    pending?: boolean;
     error?: string;
   }>();
   useEffect(() => {
@@ -66,6 +67,7 @@ export function RecipientFeed() {
                   id: selectedId,
                   listing,
                   cached: metadata.fromCache,
+                  pending: metadata.hasPendingWrites,
                 });
             },
             () => {
@@ -187,11 +189,13 @@ export function RecipientFeed() {
       return <ActivityIndicator accessibilityLabel="Loading listing details" />;
     return (
       <View style={{ gap: 12 }}>
-        {page?.fromCache && <Text>Saved information may be out of date.</Text>}
+        {detail.cached && <Text>Saved information may be out of date.</Text>}
         {selected && !detail.error ? (
           <ListingDetailSheet
             key={selected.id}
             listing={selected}
+            listingIsOffline={detail.cached}
+            listingHasPendingWrites={detail.pending}
             recipientLocation={recipientLocation}
             distanceKm={
               recipientLocation && selected.pickupLocation

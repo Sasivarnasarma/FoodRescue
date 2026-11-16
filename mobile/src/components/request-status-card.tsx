@@ -1,3 +1,4 @@
+import { useCurrentTime } from '../hooks/use-current-time';
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
@@ -54,9 +55,12 @@ export function RequestStatusCard({
   const [withdrawing, setWithdrawing] = useState(false);
   const [withdrawError, setWithdrawError] = useState('');
 
-  const derived = deriveRequestState(request, listing, currentUid);
+  const now = useCurrentTime();
+  const derived = deriveRequestState(request, listing, currentUid, now);
 
   const confirmWithdrawal = () => {
+    if (withdrawing || isOffline || hasPendingWrites || !derived.canWithdraw)
+      return;
     Alert.alert(
       'Withdraw Request?',
       'Are you sure you want to withdraw your request for this whole donation? Under FoodRescue rules, you cannot resubmit a request for this listing once withdrawn.',
@@ -176,7 +180,7 @@ export function RequestStatusCard({
       {/* Approved Next Steps Notice */}
       {derived.status === 'approved' && (
         <View style={styles.nextStepsBox}>
-          <Text style={styles.nextStepsTitle}>Pickup Handover (Phase 4):</Text>
+          <Text style={styles.nextStepsTitle}>Pickup details:</Text>
           <Text style={styles.nextStepsText}>
             Keep in touch with the donor. When you arrive at{' '}
             {listing.pickupAddress} during the pickup window, you will present
@@ -204,8 +208,10 @@ export function RequestStatusCard({
       {derived.canWithdraw && (
         <Pressable
           accessibilityRole="button"
-          accessibilityState={{ disabled: withdrawing }}
-          disabled={withdrawing}
+          accessibilityState={{
+            disabled: withdrawing || isOffline || hasPendingWrites,
+          }}
+          disabled={withdrawing || isOffline || hasPendingWrites}
           onPress={confirmWithdrawal}
           style={({ pressed }) => [
             styles.withdrawButton,

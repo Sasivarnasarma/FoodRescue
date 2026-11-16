@@ -2,17 +2,18 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  FlatList,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { useCurrentTime } from '../hooks/use-current-time';
 import { getFirebaseClients } from '../lib/firebase';
 import {
-  getListingById,
+  subscribeToListing,
   type FoodListing,
   type ListingPage,
+  type ListingPageOptions,
 } from '../lib/listings';
 import {
   subscribeToOrganizationRequests,
@@ -57,6 +58,13 @@ export function OrganizationRequestsView({
   const { auth } = getFirebaseClients();
   const currentUid = auth.currentUser?.uid;
 
+  const now = useCurrentTime();
+  const [cursors, setCursors] = useState<ListingPageOptions[]>([{}]);
+  const options = cursors[cursors.length - 1];
+  const [parentConfirmed, setParentConfirmed] = useState<
+    Record<string, boolean>
+  >({});
+  const [parentErrors, setParentErrors] = useState<Record<string, string>>({});
   const [requests, setRequests] = useState<DonationRequest[]>([]);
   const [page, setPage] = useState<ListingPage>();
   const [loading, setLoading] = useState(() => Boolean(currentUid));
@@ -67,48 +75,93 @@ export function OrganizationRequestsView({
   );
   const [withdrawingId, setWithdrawingId] = useState<string | null>(null);
 
-  // Real-time subscription to organization requests
+  // Observe parent states too: approving a different organization does not write this request.
   useEffect(() => {
-    if (!currentUid) {
-      return;
-    }
-
-    const unsubscribe = subscribeToOrganizationRequests(
-      currentUid,
-      (fetchedRequests, pageInfo) => {
-        setRequests(fetchedRequests);
-        setPage(pageInfo);
-        setLoading(false);
-
-        // Fetch parent listing titles/details for each request
-        for (const req of fetchedRequests) {
-          if (req.listingId) {
-            void getListingById(req.listingId).then((listing) => {
-              if (listing) {
-                setListingsMap((prev) => {
-                  if (prev[listing.id]) return prev;
-                  return { ...prev, [listing.id]: listing };
-                });
-              }
-            });
-          }
-        }
-      },
-      (err) => {
-        setError(
-          err.message || 'Could not load your requests. Please try again.',
-        );
-        setLoading(false);
-      },
-    );
-
-    return () => {
-      unsubscribe();
-    };
-  }, [currentUid, attempt]);
-
-  const handleWithdraw = (listingId: string) => {
     if (!currentUid) return;
+    let active = true;
+    let stop: (() => void) | undefined;
+    const parents = new Map<string, () => void>();
+    Promise.resolve()
+      .then(() => {
+        if (!active) return;
+        setLoading(true);
+        setError('');
+        stop = subscribeToOrganizationRequests(
+          currentUid,
+          (items, metadata) => {
+            if (!active) return;
+            setRequests(items);
+            setPage(metadata);
+            setLoading(false);
+            setError('');
+            const ids = new Set(items.map((item) => item.listingId));
+            for (const [id, unsubscribe] of parents) {
+              if (!ids.has(id)) {
+                unsubscribe();
+                parents.delete(id);
+              }
+            }
+            for (const id of ids) {
+              if (parents.has(id)) continue;
+              parents.set(
+                id,
+                subscribeToListing(
+                  id,
+                  (listing, meta) => {
+                    if (!active) return;
+                    if (listing)
+                      setListingsMap((prev) => ({ ...prev, [id]: listing }));
+                    setParentConfirmed((prev) => ({
+                      ...prev,
+                      [id]:
+                        !!listing && !meta.fromCache && !meta.hasPendingWrites,
+                    }));
+                    setParentErrors((prev) => ({
+                      ...prev,
+                      [id]: listing ? '' : 'Donation details unavailable.',
+                    }));
+                  },
+                  () => {
+                    if (!active) return;
+                    setParentConfirmed((prev) => ({ ...prev, [id]: false }));
+                    setParentErrors((prev) => ({
+                      ...prev,
+                      [id]: 'Donation details unavailable. Reconnect or refresh.',
+                    }));
+                  },
+                ),
+              );
+            }
+          },
+          (cause) => {
+            if (!active) return;
+            setError(cause.message || 'Could not load your requests. Retry.');
+            setLoading(false);
+          },
+          options,
+        );
+      })
+      .catch(() => {
+        if (active) {
+          setError('Could not load your requests. Retry.');
+          setLoading(false);
+        }
+      });
+    return () => {
+      active = false;
+      stop?.();
+      for (const unsubscribe of parents.values()) unsubscribe();
+    };
+  }, [currentUid, attempt, options]);
+  const handleWithdraw = (listingId: string) => {
+    if (
+      !currentUid ||
+      page?.fromCache ||
+      page?.hasPendingWrites ||
+      !parentConfirmed[listingId] ||
+      withdrawingId
+    )
+      return;
 
     Alert.alert(
       'Withdraw Request?',
@@ -166,7 +219,10 @@ export function OrganizationRequestsView({
   if (requests.length === 0) {
     return (
       <View style={styles.emptyContainer}>
-        <Text style={styles.emptyTitle}>No Requests Yet</Text>
+        <Text style={styles.emptyTitle}>No requests on this page</Text>
+        <Pressable accessibilityRole="button" onPress={() => setCursors([{}])}>
+          <Text>Return to first page</Text>
+        </Pressable>
         <Text style={styles.emptyText}>
           Your organization has not submitted any donation requests. Browse
           nearby surplus donations to request whole listings for pickup.
@@ -192,16 +248,14 @@ export function OrganizationRequestsView({
         </View>
       )}
 
-      <FlatList
-        data={requests}
-        keyExtractor={(item) => `${item.listingId}_${item.id}`}
-        contentContainerStyle={styles.listContent}
-        renderItem={({ item }) => {
+      <View style={styles.listContent}>
+        {requests.map((item) => {
           const listing = listingsMap[item.listingId];
           const derived = deriveRequestState(
             item,
             listing ?? null,
             currentUid ?? '',
+            now,
           );
 
           let badgeBg = colors.neutralBg;
@@ -228,6 +282,7 @@ export function OrganizationRequestsView({
 
           return (
             <Pressable
+              key={`${item.listingId}_${item.id}`}
               accessibilityRole="button"
               accessibilityLabel={`Request for ${listing?.title || 'Donation'}, status: ${derived.label}`}
               style={({ pressed }) => [
@@ -240,7 +295,8 @@ export function OrganizationRequestsView({
               <View style={styles.cardHeader}>
                 <View style={styles.titleColumn}>
                   <Text style={styles.listingTitle}>
-                    {listing ? listing.title : 'Loading donation details…'}
+                    {parentErrors[item.listingId] ||
+                      (listing ? listing.title : 'Loading donation details…')}
                   </Text>
                   {listing && (
                     <Text style={styles.listingProvider}>
@@ -290,8 +346,16 @@ export function OrganizationRequestsView({
                   <Pressable
                     accessibilityRole="button"
                     style={styles.withdrawAction}
-                    onPress={() => handleWithdraw(item.listingId)}
-                    disabled={withdrawingId === item.listingId}
+                    onPress={(event) => {
+                      event.stopPropagation();
+                      handleWithdraw(item.listingId);
+                    }}
+                    disabled={
+                      !!withdrawingId ||
+                      page?.fromCache ||
+                      page?.hasPendingWrites ||
+                      !parentConfirmed[item.listingId]
+                    }
                   >
                     {withdrawingId === item.listingId ? (
                       <ActivityIndicator size="small" color={colors.red} />
@@ -303,8 +367,35 @@ export function OrganizationRequestsView({
               </View>
             </Pressable>
           );
-        }}
-      />
+        })}
+      </View>
+      <View style={{ flexDirection: 'row', gap: 16, padding: 12 }}>
+        <Pressable
+          accessibilityRole="button"
+          disabled={cursors.length === 1}
+          onPress={() => setCursors((v) => v.slice(0, -1))}
+        >
+          <Text>Previous</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => setAttempt((v) => v + 1)}
+        >
+          <Text>Refresh</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          disabled={
+            !page?.nextCursor || page.fromCache || page.hasPendingWrites
+          }
+          onPress={() => {
+            if (page?.nextCursor)
+              setCursors((v) => [...v, { after: page.nextCursor! }]);
+          }}
+        >
+          <Text>Next</Text>
+        </Pressable>
+      </View>
     </View>
   );
 }

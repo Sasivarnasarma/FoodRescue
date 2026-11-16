@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useCurrentTime } from '../hooks/use-current-time';
 import { getFirebaseClients } from '../lib/firebase';
 import { getListingPhotoBase64, type FoodListing } from '../lib/listings';
 import {
@@ -29,6 +30,8 @@ interface ListingDetailSheetProps {
   recipientLocation: LocationCoordinates | null;
   distanceKm: number | null;
   onBack: () => void;
+  listingIsOffline?: boolean;
+  listingHasPendingWrites?: boolean;
 }
 
 export function ListingDetailSheet({
@@ -36,10 +39,15 @@ export function ListingDetailSheet({
   recipientLocation,
   distanceKm,
   onBack,
+  listingIsOffline = false,
+  listingHasPendingWrites = false,
 }: ListingDetailSheetProps) {
   const [photoBase64, setPhotoBase64] = useState<string | null>(null);
   const [loadingPhoto, setLoadingPhoto] = useState(true);
 
+  const now = useCurrentTime();
+  const [requestError, setRequestError] = useState('');
+  const [requestAttempt, setRequestAttempt] = useState(0);
   // Request state
   const { auth } = getFirebaseClients();
   const currentUid = auth.currentUser?.uid;
@@ -48,7 +56,7 @@ export function ListingDetailSheet({
   const [requestMeta, setRequestMeta] = useState<{
     fromCache: boolean;
     hasPendingWrites: boolean;
-  }>({ fromCache: false, hasPendingWrites: false });
+  }>({ fromCache: true, hasPendingWrites: false });
   const [loadingRequest, setLoadingRequest] = useState(() =>
     Boolean(currentUid && listing.id),
   );
@@ -80,11 +88,15 @@ export function ListingDetailSheet({
       listing.id,
       currentUid,
       (request, meta) => {
+        setRequestError('');
         setMyRequest(request);
         setRequestMeta(meta);
         setLoadingRequest(false);
       },
-      () => {
+      (error) => {
+        setRequestError(
+          error.message || 'Could not check your request. Retry.',
+        );
         setLoadingRequest(false);
       },
     );
@@ -92,7 +104,7 @@ export function ListingDetailSheet({
     return () => {
       unsubscribe();
     };
-  }, [listing.id, currentUid]);
+  }, [listing.id, currentUid, requestAttempt]);
 
   const handleDirections = async () => {
     try {
@@ -127,7 +139,12 @@ export function ListingDetailSheet({
     });
   };
 
-  const derivedState = deriveRequestState(myRequest, listing, currentUid ?? '');
+  const derivedState = deriveRequestState(
+    myRequest,
+    listing,
+    currentUid ?? '',
+    now,
+  );
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -271,7 +288,21 @@ export function ListingDetailSheet({
       </View>
 
       {/* Request Section */}
-      {loadingRequest ? (
+      {requestError ? (
+        <View style={styles.closedCard}>
+          <Text accessibilityRole="alert">{requestError}</Text>
+          <TouchableOpacity
+            accessibilityRole="button"
+            onPress={() => {
+              setRequestError('');
+              setLoadingRequest(true);
+              setRequestAttempt((v) => v + 1);
+            }}
+          >
+            <Text>Retry request status</Text>
+          </TouchableOpacity>
+        </View>
+      ) : loadingRequest ? (
         <View style={styles.requestLoadingCard}>
           <ActivityIndicator size="small" color="#167044" />
           <Text style={styles.requestLoadingText}>
@@ -283,8 +314,10 @@ export function ListingDetailSheet({
           listing={listing}
           request={myRequest}
           currentUid={currentUid ?? ''}
-          isOffline={requestMeta.fromCache}
-          hasPendingWrites={requestMeta.hasPendingWrites}
+          isOffline={requestMeta.fromCache || listingIsOffline}
+          hasPendingWrites={
+            requestMeta.hasPendingWrites || listingHasPendingWrites
+          }
           onWithdraw={async () => {
             if (!currentUid) return;
             await withdrawDonationRequest(listing.id, currentUid);
@@ -293,6 +326,12 @@ export function ListingDetailSheet({
       ) : derivedState.canRequest ? (
         <RequestForm
           listing={listing}
+          disabled={
+            requestMeta.fromCache ||
+            requestMeta.hasPendingWrites ||
+            listingIsOffline ||
+            listingHasPendingWrites
+          }
           departureLocation={
             recipientLocation
               ? {

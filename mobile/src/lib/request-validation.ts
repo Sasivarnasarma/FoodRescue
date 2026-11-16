@@ -30,6 +30,19 @@ export function validatePickupProposal(
     };
   }
 
+  if (
+    !pickupStartsAt ||
+    !pickupDeadline ||
+    !Number.isFinite(pickupStartsAt.getTime()) ||
+    !Number.isFinite(pickupDeadline.getTime()) ||
+    !Number.isFinite(now.getTime()) ||
+    pickupStartsAt.getTime() >= pickupDeadline.getTime()
+  ) {
+    return {
+      valid: false,
+      error: 'This donation does not have a valid pickup window.',
+    };
+  }
   const nowMillis = now.getTime();
   const proposedMillis = proposedTime.getTime();
 
@@ -165,40 +178,6 @@ export function deriveRequestState(
     };
   }
 
-  // If request is approved or listing is assigned to current user
-  if (
-    request?.status === 'approved' ||
-    (listing.status === 'assigned' &&
-      listing.acceptedOrganizationUid === currentUid)
-  ) {
-    return {
-      status: 'approved',
-      label: 'Request Approved!',
-      tone: 'success',
-      description:
-        'The donor approved your request and assigned this whole donation to your organization. Pickup handover and QR verification will occur during pickup.',
-      canWithdraw: false,
-      canRequest: false,
-    };
-  }
-
-  // If listing is assigned to another organization
-  if (
-    listing.status === 'assigned' &&
-    listing.acceptedOrganizationUid &&
-    listing.acceptedOrganizationUid !== currentUid
-  ) {
-    return {
-      status: 'assigned_to_other',
-      label: 'Assigned to Another Recipient',
-      tone: 'neutral',
-      description:
-        'The donor has selected another organization for this donation listing.',
-      canWithdraw: false,
-      canRequest: false,
-    };
-  }
-
   // If listing is collected
   if (listing.status === 'collected' || request?.status === 'collected') {
     return {
@@ -237,6 +216,40 @@ export function deriveRequestState(
       label: 'Pickup Window Expired',
       tone: 'neutral',
       description: 'The pickup deadline for this donation has passed.',
+      canWithdraw: false,
+      canRequest: false,
+    };
+  }
+
+  // If request is approved or listing is assigned to current user
+  if (
+    request?.status === 'approved' ||
+    (listing.status === 'assigned' &&
+      listing.acceptedOrganizationUid === currentUid)
+  ) {
+    return {
+      status: 'approved',
+      label: 'Request Approved!',
+      tone: 'success',
+      description:
+        'The donor approved your request and assigned this whole donation to your organization. Pickup handover and QR verification will occur during pickup.',
+      canWithdraw: false,
+      canRequest: false,
+    };
+  }
+
+  // If listing is assigned to another organization
+  if (
+    listing.status === 'assigned' &&
+    listing.acceptedOrganizationUid &&
+    listing.acceptedOrganizationUid !== currentUid
+  ) {
+    return {
+      status: 'assigned_to_other',
+      label: 'Assigned to Another Recipient',
+      tone: 'neutral',
+      description:
+        'The donor has selected another organization for this donation listing.',
       canWithdraw: false,
       canRequest: false,
     };
