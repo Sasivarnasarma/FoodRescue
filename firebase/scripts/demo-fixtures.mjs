@@ -42,3 +42,34 @@ export function donationFixtures(now = Date.now()) {
     },
   ];
 }
+
+export function competingRequestFixtures(
+  listingId = 'demo-urgent-near',
+  deadlineMs = Date.now() + 45 * 60000,
+  now = Date.now(),
+) {
+  return [
+    {
+      organizationUid: 'demo-competing-org-1',
+      organizationName: 'Synthetic Hope Kitchen',
+      listingId,
+      providerUid: 'demo-donor',
+      latitude: 6.9451,
+      longitude: 79.8612,
+      plannedPickupAt: deadlineMs - 15 * 60000,
+      canMeetStorageRequirement: true,
+      status: 'requested',
+    },
+    {
+      organizationUid: 'demo-competing-org-2',
+      organizationName: 'Synthetic Care Foundation',
+      listingId,
+      providerUid: 'demo-donor',
+      latitude: 6.9631,
+      longitude: 79.8612,
+      plannedPickupAt: deadlineMs - 30 * 60000,
+      canMeetStorageRequirement: true,
+      status: 'requested',
+    },
+  ];
+}

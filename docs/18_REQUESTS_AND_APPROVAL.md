@@ -16,6 +16,17 @@ Approval atomically writes the listing to `assigned` with `acceptedOrganizationU
 
 The single-request listener also supplies cache/pending metadata as its second callback argument. Both query subscriptions use `(requests, page)` callbacks. `page` supplies `fromCache`, `hasPendingWrites` and `nextCursor`. Pass `{ after: page.nextCursor }` as the final options argument for another page, scoped to the same query. Queries return at most 50 documents. Unsubscribe on screen exit and label cached/pending results. Mutation promises resolve after server acknowledgement; approval transactions require a connection. Organizations can read their own missing request before submitting and their request history without other organizations' locations. Rules check private recipient eligibility during donor approval; donors cannot read private recipient profiles directly.
 
+## Smart matching and request ranking engine
+
+Member 4 provides pure, deterministic client-side request ranking in `mobile/src/lib/request-ranking.ts`:
+
+- `checkRequestEligibility(listing, request, currentTime)`: Rechecks open listing status, pending request status (`requested`), affirmative storage compatibility declaration (`canMeetStorageRequirement`), non-stale pickup proposal, window boundaries (`pickupStartsAt` to `pickupDeadline`), and the required 15 minutes between current approval time and the deadline. Returns descriptive reasons if ineligible.
+- `calculateRequestScore(listing, request, currentTime)`: Computes straight-line Haversine distance normalized to 10 km (`distanceScore = 100 * clamp(1 - distanceKm / 10, 0, 1)` with 60% weight) and pickup window buffer normalized to 30 minutes (`bufferScore = 100 * clamp(bufferMinutes / 30, 0, 1)` with 40% weight). Yields total composite score (`0.6 * distanceScore + 0.4 * bufferScore`).
+- `rankListingRequests(listing, requests, currentTime)`: Categorizes requests into `rankedEligible` (scored and sorted deterministically), `manualAssessment` (eligible requests missing coordinates for manual donor review), and `ineligible` (violating requirements). Applies tie-breaking: higher total score, earlier proposed pickup time, then alphabetical organization UID.
+- `generateRankingExplanation(request, listing, eligibility, breakdown, rank)` and `explainRankingComparison(first, second)`: Output structured factors, readable summaries, and comparative rationales explaining why one proposal outranks another (e.g. earlier pickup buffer outweighing distance). Includes disclaimers stating pickup time is an organization commitment, not a travel prediction.
+- `getListingUrgency(listing, currentTime)`: Computes deadline proximity separately from request rankings.
+- Seeded competing request fixtures for emulator rehearsal are provided in `firebase/scripts/demo-fixtures.mjs` (`competingRequestFixtures`) and seeded via `firebase/scripts/seed-donation-demo.mjs`.
+
 ## Departure point and distance coordination (Member 5)
 
 Member 5 implements the coordinates connection and distance resolution for recipient requests:
@@ -33,12 +44,14 @@ Member 5 implements the coordinates connection and distance resolution for recip
   - Provides real-time straight-line distance feedback to the listing pickup location.
 The shared departure card is intended for the recipient request form; there is one submission/status flow maintained with Member 2.
 
+
 ## Checks and deployment
 
 From the root:
 
 ```powershell
 pnpm test:rules
+pnpm test:mobile
 pnpm --dir mobile lint
 pnpm --dir mobile format:check
 pnpm --dir mobile typecheck
