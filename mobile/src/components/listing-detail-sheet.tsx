@@ -24,6 +24,7 @@ import {
 import { deriveRequestState } from '../lib/request-validation';
 import { RequestForm } from './request-form';
 import { RequestStatusCard } from './request-status-card';
+import { RecipientPickupCard } from './recipient-pickup-card';
 
 interface ListingDetailSheetProps {
   listing: FoodListing;
@@ -309,6 +310,21 @@ export function ListingDetailSheet({
             Checking request status…
           </Text>
         </View>
+      ) : myRequest &&
+        (myRequest.status === 'approved' ||
+          myRequest.status === 'collected' ||
+          listing.status === 'collected' ||
+          (listing.status === 'assigned' &&
+            listing.acceptedOrganizationUid === currentUid)) ? (
+        <RecipientPickupCard
+          listing={listing}
+          request={myRequest}
+          currentUid={currentUid ?? ''}
+          isOffline={requestMeta.fromCache || listingIsOffline}
+          hasPendingWrites={
+            requestMeta.hasPendingWrites || listingHasPendingWrites
+          }
+        />
       ) : myRequest ? (
         <RequestStatusCard
           listing={listing}

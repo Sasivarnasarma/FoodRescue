@@ -306,3 +306,117 @@ export function deriveRequestState(
     canRequest: true,
   };
 }
+
+export type PickupWindowStatus = 'before_start' | 'active' | 'elapsed';
+export type RecipientConfirmationStatus =
+  'not_confirmed' | 'confirmed_valid' | 'confirmed_stale';
+
+export interface RecipientPickupTiming {
+  windowStatus: PickupWindowStatus;
+  canConfirmHandover: boolean;
+  confirmationStatus: RecipientConfirmationStatus;
+  remainingConfirmationSeconds: number;
+  remainingWindowSeconds: number;
+  secondsUntilStart: number;
+  canReconcileExpiry: boolean;
+  cancellationEffect: 'open' | 'cancelled';
+}
+
+/**
+ * Computes live pickup timing and state for an assigned recipient.
+ */
+export function getRecipientPickupTiming(
+  listing: FoodListing,
+  request: DonationRequest | null,
+  now = new Date(),
+): RecipientPickupTiming {
+  const nowMs = now.getTime();
+  const startMs = listing.pickupStartsAt?.getTime() ?? nowMs;
+  const deadlineMs = listing.pickupDeadline?.getTime() ?? nowMs;
+
+  let windowStatus: PickupWindowStatus = 'active';
+  if (nowMs < startMs) {
+    windowStatus = 'before_start';
+  } else if (nowMs >= deadlineMs) {
+    windowStatus = 'elapsed';
+  }
+
+  const canConfirmHandover =
+    windowStatus === 'active' &&
+    listing.status === 'assigned' &&
+    request?.status === 'approved';
+
+  let confirmationStatus: RecipientConfirmationStatus = 'not_confirmed';
+  let remainingConfirmationSeconds = 0;
+
+  if (request?.recipientConfirmedAt) {
+    const confirmedMs = request.recipientConfirmedAt.getTime();
+    const expiryMs = confirmedMs + 5 * 60 * 1000;
+    if (nowMs <= expiryMs && confirmedMs <= nowMs) {
+      confirmationStatus = 'confirmed_valid';
+      remainingConfirmationSeconds = Math.max(
+        0,
+        Math.ceil((expiryMs - nowMs) / 1000),
+      );
+    } else {
+      confirmationStatus = 'confirmed_stale';
+      remainingConfirmationSeconds = 0;
+    }
+  }
+
+  const remainingWindowSeconds = Math.max(
+    0,
+    Math.ceil((deadlineMs - nowMs) / 1000),
+  );
+  const secondsUntilStart = Math.max(0, Math.ceil((startMs - nowMs) / 1000));
+
+  const canReconcileExpiry =
+    windowStatus === 'elapsed' &&
+    (listing.status === 'assigned' || listing.status === 'open');
+
+  const cancellationEffect =
+    nowMs + 15 * 60 * 1000 <= deadlineMs ? 'open' : 'cancelled';
+
+  return {
+    windowStatus,
+    canConfirmHandover,
+    confirmationStatus,
+    remainingConfirmationSeconds,
+    remainingWindowSeconds,
+    secondsUntilStart,
+    canReconcileExpiry,
+    cancellationEffect,
+  };
+}
+
+export function formatSecondsCountdown(totalSeconds: number): string {
+  const clamped = Math.max(0, Math.floor(totalSeconds));
+  const minutes = Math.floor(clamped / 60);
+  const seconds = clamped % 60;
+  return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+}
+
+export function formatTimeSpan(totalSeconds: number): string {
+  const clamped = Math.max(0, Math.floor(totalSeconds));
+  if (clamped < 60) return `${clamped}s`;
+  const minutes = Math.floor(clamped / 60);
+  if (minutes < 60) {
+    const sec = clamped % 60;
+    return sec > 0 ? `${minutes}m ${sec}s` : `${minutes}m`;
+  }
+  const hours = Math.floor(minutes / 60);
+  const remainingMin = minutes % 60;
+  return remainingMin > 0 ? `${hours}h ${remainingMin}m` : `${hours}h`;
+}
+
+export function getPickupQrPayload(listingId: string): {
+  reference: string;
+  raw: string;
+  version: number;
+} {
+  return {
+    reference: `FR-${listingId.toUpperCase()}`,
+    raw: `foodrescue:pickup:v1:${listingId}`,
+    version: 1,
+  };
+}

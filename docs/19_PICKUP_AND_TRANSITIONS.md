@@ -57,3 +57,33 @@ pnpm --dir firebase exec firebase deploy --only firestore:rules --project foodre
 ```
 
 No deployment was performed during this review. After the other pickup screens are integrated, rehearse on two physical Android devices: confirm then collect, clear and reconfirm, let confirmation expire, cancel with and without enough remaining time, close as donor, and reconcile an overdue assignment. Verify both devices show the same committed state and denied/duplicate actions show errors. Physical testing is pending; automated checks do not verify QR camera behavior.
+
+## Member 2 Recipient Pickup & Collection History Implementation
+
+Member 2 implemented the recipient pickup handover flow and collection history in mobile:
+
+1. **Visual QR Reference & Manual Code (`QrCodeView`)**:
+   - Generates an opaque QR code payload (`foodrescue:pickup:v1:${listingId}`) and manual reference (`FR-${listingId.toUpperCase()}`).
+   - Contains no user credentials, tokens, or private information.
+   - Includes standard 21x21 visual module patterns and finder squares without external heavy QR libraries.
+
+2. **Recipient Pickup Card (`RecipientPickupCard`)**:
+   - Integrated into `ListingDetailSheet` when an organization has an approved assignment or completed collection.
+   - Shows live pickup window progress: "Pickup Window Starts in X", "Pickup Window Open", or "Pickup Deadline Passed".
+   - Signed-in Handover Confirmation: calls `confirmPickupHandover(listingId, currentUid)` within an active window.
+   - 5-Minute Confirmation Timer: tracks active confirmation with a ticking countdown; alerts when confirmation exceeds 5 minutes (`confirmed_stale`) and prompts reconfirmation.
+   - Confirmation Retraction: enables the recipient to retract accidental confirmations via `clearPickupHandover`.
+   - Cancellation / Release Handling: alerts the recipient whether >= 15 minutes remain (reopening listing to others) or < 15 minutes remain (cancelling listing), executing `cancelApprovedDonation`.
+   - Expiry Reconciliation: enables `reconcileExpiredListing` once past the pickup deadline.
+   - Completed Handover Summary: presents a collection receipt with item title, quantity, donor name, address, confirmed timestamp, and collected timestamp.
+
+3. **Collection History & Filter Tabs (`OrganizationRequestsView`)**:
+   - Segmented navigation tabs: **All**, **Active Pickups** (approved), **Pending** (requested), and **Collection History** (collected).
+   - Dynamic badges and callouts guiding organizations directly to the QR reference and handover confirmation screen.
+   - Friendly empty states for each tab explaining the handover lifecycle.
+
+4. **Validation Helpers & Unit Tests (`request-validation.ts` & `recipient-pickup.test.mjs`)**:
+   - `getRecipientPickupTiming`: computes window states, 5-minute countdown, stale detection, expiry reconciliation eligibility, and cancellation cutoff effects.
+   - `getPickupQrPayload`: formats versioned QR payloads and manual codes.
+   - `formatSecondsCountdown` and `formatTimeSpan`: formats mm:ss timers and duration spans.
+   - Comprehensive test suite covering timing boundaries, countdowns, stale thresholds, cancellation rules, and QR payloads.
