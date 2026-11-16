@@ -10,6 +10,7 @@ import {
   donorColors,
 } from '@/components/donor-controls';
 import type { FoodListing } from '@/lib/listings';
+import { DonorIncomingRequests } from '@/components/donor-incoming-requests';
 import { DonorListingForm } from '@/components/donor-listing-form';
 import { DonorListingsFeed } from '@/components/donor-listings-feed';
 import { useDonorProfile } from '@/hooks/use-donor-profile';
@@ -39,10 +40,11 @@ export function DonorProfile({ user }: { user: User }) {
   const [businessName, setBusinessName] = useState('');
   const [busy, setBusy] = useState<'profile' | 'signout' | null>(null);
   const [editing, setEditing] = useState<FoodListing>();
+  const [selectedListing, setSelectedListing] = useState<FoodListing>();
   const [notice, setNotice] = useState('');
-  const [viewMode, setViewMode] = useState<'profile' | 'feed' | 'create'>(
-    'profile',
-  );
+  const [viewMode, setViewMode] = useState<
+    'profile' | 'feed' | 'create' | 'requests'
+  >('profile');
   const [message, setMessage] = useState('');
 
   async function submit() {
@@ -234,6 +236,17 @@ export function DonorProfile({ user }: { user: User }) {
     );
   }
 
+  if (canManage && viewMode === 'requests' && selectedListing) {
+    return (
+      <View style={{ flex: 1, minHeight: 450 }}>
+        <DonorIncomingRequests
+          listing={selectedListing}
+          onBack={() => setViewMode('feed')}
+        />
+      </View>
+    );
+  }
+
   if (canManage && viewMode === 'feed') {
     return (
       <View style={{ flex: 1, minHeight: 450 }}>
@@ -246,6 +259,10 @@ export function DonorProfile({ user }: { user: User }) {
           onEditDraft={(listing) => {
             setEditing(listing);
             setViewMode('create');
+          }}
+          onViewRequests={(listing) => {
+            setSelectedListing(listing);
+            setViewMode('requests');
           }}
         />
         <View style={{ padding: 16 }}>

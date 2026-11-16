@@ -11,6 +11,7 @@
     "lint": "pnpm -r --if-present run lint",
     "format:check": "pnpm -r --if-present run format:check",
     "typecheck": "pnpm -r --if-present run typecheck",
+    "test:mobile": "pnpm --filter foodrescue-mobile test",
     "test:rules": "pnpm --filter foodrescue-firebase test",
     "test:auth": "pnpm --filter foodrescue-firebase test:auth"
   }
