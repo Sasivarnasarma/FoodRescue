@@ -12,13 +12,13 @@ The QR identifies an opaque listing reference and version; it grants no authorit
 
 ## Cancellation and expiry
 
-| Action                                                                           | Result                                                                                |
-| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| Either participant releases an assignment with at least 15 minutes remaining     | Listing becomes open; selected request becomes cancelled                              |
-| Either participant releases with less than 15 minutes remaining, before deadline | Listing and selected request become cancelled                                         |
-| Donor explicitly closes an assignment before deadline                            | Listing and selected request become cancelled, even with 15 minutes or more remaining |
-| Assigned recipient attempts to close with at least 15 minutes remaining          | Rejected; release must reopen the listing                                             |
-| Owning donor, admin or assigned organization reconciles at/after deadline        | Open listing expires; an assigned listing and its selected request expire atomically  |
+| Action | Result |
+|---|---|
+| Either participant releases an assignment with at least 15 minutes remaining | Listing becomes open; selected request becomes cancelled |
+| Either participant releases with less than 15 minutes remaining, before deadline | Listing and selected request become cancelled |
+| Donor explicitly closes an assignment before deadline | Listing and selected request become cancelled, even with 15 minutes or more remaining |
+| Assigned recipient attempts to close with at least 15 minutes remaining | Rejected; release must reopen the listing |
+| Owning donor, admin or assigned organization reconciles at/after deadline | Open listing expires; an assigned listing and its selected request expire atomically |
 
 Cancellation and assigned expiry clear both `acceptedOrganizationUid` and `recipientConfirmedAt`. Other pending requests stay unchanged. After reopening, an organization whose request was cancelled cannot resubmit for that listing; other pending proposals are eligible only if still valid. Closed listings cannot reopen. Removing confirmation competes safely with collection: they cannot both succeed against the same approved state.
 
@@ -36,44 +36,29 @@ Every operation waits for authentication restoration and uses a transaction, inc
 
 Use existing `subscribeToListing` and `subscribeToMyRequestForListing` callbacks for live state, including cache/pending metadata. Cached state is informational; do not enable pickup actions until the listing and request are confirmed by the server. Existing listing parsing exposes `collectedAt`; request parsing exposes `recipientConfirmedAt`. History remains based on authorized listing/request reads; no new collection or index is needed for these operations.
 
-## Member 1 — Donor pickup screen and scanner integration
+## Shared QR and reference components (Member 5)
 
-Member 1 connects the camera scanner to the donor pickup screen, displays live recipient confirmation, completes collection inside the pickup window, and updates donor history:
+Member 5 implements the shared QR display, camera scanning, manual reference fallback, and pickup reminder utilities:
 
-1. **Pickup QR Parser (`mobile/src/lib/pickup-qr.ts`)**:
-   - Parses standard JSON payload (`{"listingId": "...", "version": 1}`), custom deep link URI schemes (`foodrescue://pickup?listingId=...` / `foodrescue://pickup/...`), and manual alphanumeric reference strings.
-   - Generates JSON payload for QR codes via `generatePickupQrPayload(listingId, version)`.
-
-2. **Collection Timing & Eligibility (`mobile/src/lib/pickup-validation.ts`)**:
-   - `checkDonorCollectionEligibility` determines whether collection is ready, awaiting confirmation, expired (> 5 minutes elapsed), outside window (< startsAt), or expired (>= deadline).
-   - Computes `remainingConfirmationMs` for live countdown timers.
-
-3. **Donor Pickup Screen (`mobile/src/components/donor-pickup-screen.tsx`)**:
-   - Subscribes in real time to both listing and approved recipient request.
-   - Live 5-minute security countdown timer with second-by-second updates via `useCurrentTime()`.
-   - Clear visual status panels for:
-     - Ready for collection: displays recipient confirmation time, remaining validity countdown, and primary "Complete Collection Handover" button.
-     - Awaiting recipient confirmation: guides donor to ask recipient to tap "Confirm Handover".
-     - Confirmation expired: prompts recipient to re-confirm handover.
-     - Pickup window closed or deadline expired: offers expiry reconciliation.
-   - Cancellation actions:
-     - "Release Assignment": reopens listing to other organizations if >= 15 min remain.
-     - "Close Donation Listing": permanently cancels listing and approved request.
-     - "Reconcile Expired Donation": marks overdue listing and request as expired.
-   - Completed Collection Receipt: displays official completion timestamp, accepted organization ID, quantity, and food safety handover notice.
-
-4. **Pickup QR Scanner Modal (`mobile/src/components/donor-pickup-scanner.tsx`)**:
-   - Integrated camera scanning via `CameraView` from `expo-camera` with `useDevicePermission('camera')` handling.
-   - Viewfinder overlay targeting frame with green corner guides and scanning feedback.
-   - Full manual reference entry fallback allowing direct input or copy-pasting of references, JSON, or URIs.
-   - Web platform fallback advising manual entry.
-   - Validates that scanned/entered listing exists and is owned by the signed-in donor.
-
-5. **Feed & Profile Navigation (`mobile/src/components/donor-listings-feed.tsx`, `mobile/src/components/donor-profile.tsx`)**:
-   - Feed header bar includes "📷 Scan / Lookup" shortcut.
-   - Assigned cards display "Handover & Pickup →" action.
-   - Collected cards display "View Collection Receipt" action.
-   - Donor profile includes direct "📷 Scan Pickup QR / Handover" shortcut when approved.
+- `mobile/src/lib/qr-service.ts`:
+  - `CURRENT_QR_VERSION = 1`, `QR_PREFIX = 'foodrescue'`.
+  - `encodePickupQrPayload(listingId, version?)`: produces versioned payload `foodrescue:v1:<listingId>`.
+  - `parsePickupReference(rawInput)`: strictly validates scanned QR payload or manual reference input. Strips whitespace, rejects arbitrary URLs (e.g. `https://...`) to prevent phishing or redirection, enforces maximum payload length, validates QR version, and validates listing ID format. Supports entering either full payload or plain reference ID.
+  - `generateQrMatrix(payload)`: generates a 2D boolean module matrix for pure React Native vector rendering.
+- `mobile/src/lib/pickup-reminders.ts`:
+  - `getPickupCountdown(startsAt, deadline, now?)`: models pickup window progression across `upcoming`, `active`, `expiring_soon` (<= 15 minutes before deadline), and `expired` phases.
+  - `computeReminderSchedule(listingId, startsAt, deadline)`: calculates reminder checkpoints.
+  - `isPickupReminderSet(listingId)` & `setPickupReminder(listingId, enabled)`: manages persistent in-app local pickup reminder preferences in `AsyncStorage`.
+- `mobile/src/components/qr-display-card.tsx`:
+  - Recipient pickup display card rendering a crisp vector-grid QR code without native SVG dependencies.
+  - Displays a selectable monospace Reference ID for native long-press copying.
+  - Shows real-time window timing/countdown badge and handover confirmation guidance.
+  - In-app pickup reminder toggle button.
+  - Embedded into `mobile/src/components/request-status-card.tsx` for approved requests.
+- `mobile/src/components/qr-scanner-card.tsx`:
+  - Donor scanner component with live `CameraView` barcode scanner, target reticle overlay, and camera permission handling (request prompt, denial banner, and device Settings link).
+  - Integrated "Enter Manually" tab providing full manual reference entry fallback without camera.
+  - In-place QR payload validation and optional `expectedListingId` match verification.
 
 ## Verification and deployment
 
@@ -87,7 +72,7 @@ pnpm --dir mobile typecheck
 pnpm --dir mobile format:check
 ```
 
-The review passed 54 mobile tests and 44 rules tests. Coverage includes confirmation/retraction ownership, stale/future confirmations, revoked recipient eligibility, replay, atomic cancellation/expiry, admin expiry, detached requests and collection racing with retraction. Pure timing tests cover exact five-minute, 15-minute and deadline boundaries.
+The review passed 41 mobile tests and 44 rules tests. Coverage includes confirmation/retraction ownership, stale/future confirmations, revoked recipient eligibility, replay, atomic cancellation/expiry, admin expiry, detached requests and collection racing with retraction. Pure timing tests cover exact five-minute, 15-minute and deadline boundaries.
 
 The latest rules still need deployment before live integration:
 
@@ -96,3 +81,8 @@ pnpm --dir firebase exec firebase deploy --only firestore:rules --project foodre
 ```
 
 No deployment was performed during this review. After the other pickup screens are integrated, rehearse on two physical Android devices: confirm then collect, clear and reconfirm, let confirmation expire, cancel with and without enough remaining time, close as donor, and reconcile an overdue assignment. Verify both devices show the same committed state and denied/duplicate actions show errors. Physical testing is pending; automated checks do not verify QR camera behavior.
+QR review: the standard payload is `foodrescue:v1:<listingId>`. Unsupported versions and arbitrary URLs are rejected. Render at least four white modules around the QR for scanning. Reference text is selectable for native copy. Optional reminders are foreground alerts while the pickup card is open; no background notification is scheduled. A failed preference save is shown as an error. Scanner events and manual lookup share one submission lock, and the camera is paused after a scan or when inactive.
+
+## Donor pickup integration
+
+The donor donations feed opens assigned pickup details and collected receipts. The scanner resolves an owned listing through the shared QR/reference contract. Live listing/request listeners drive confirmation readiness, collection, assignment release, donor close and overdue expiry reconciliation. Physical Android acceptance is still pending.

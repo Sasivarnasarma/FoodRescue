@@ -242,3 +242,25 @@ export async function reconcileExpiredListing(
     });
   });
 }
+
+export {
+  encodePickupQrPayload,
+  parsePickupReference,
+  generateQrMatrix,
+  isValidListingId,
+  CURRENT_QR_VERSION,
+  QR_PREFIX,
+  type QrParseResult,
+  type QrMatrix,
+} from './qr-service';
+
+export {
+  getPickupCountdown,
+  formatDuration,
+  computeReminderSchedule,
+  isPickupReminderSet,
+  setPickupReminder,
+  type PickupCountdownInfo,
+  type PickupWindowPhase,
+  type ReminderSchedule,
+} from './pickup-reminders';
