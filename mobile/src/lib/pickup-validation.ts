@@ -74,7 +74,12 @@ export function checkDonorCollectionEligibility(
   const confirmedMs =
     confirmedAt instanceof Date ? confirmedAt.getTime() : (confirmedAt ?? NaN);
 
-  if (!Number.isFinite(startsMs) || !Number.isFinite(deadlineMs)) {
+  if (
+    !Number.isFinite(startsMs) ||
+    !Number.isFinite(deadlineMs) ||
+    !Number.isFinite(now) ||
+    startsMs >= deadlineMs
+  ) {
     return {
       canCollect: false,
       status: 'outside_window',

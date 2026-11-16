@@ -1,3 +1,4 @@
+import { useCurrentTime } from '@/hooks/use-current-time';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -36,6 +37,7 @@ export function DonorListingsFeed({
   const [cursors, setCursors] = useState<ListingPageOptions[]>([{}]);
   const [attempt, setAttempt] = useState(0);
   const options = cursors[cursors.length - 1];
+  const now = useCurrentTime();
   const [listings, setListings] = useState<FoodListing[]>([]);
   const [loading, setLoading] = useState(true);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
@@ -236,6 +238,19 @@ export function DonorListingsFeed({
           </TouchableOpacity>
         </View>
       )}
+      {item.status === 'open' &&
+        item.pickupDeadline &&
+        item.pickupDeadline.getTime() <= now.getTime() && (
+          <TouchableOpacity
+            accessibilityRole="button"
+            onPress={() => onOpenPickup?.(item)}
+            style={styles.pickupButton}
+          >
+            <Text style={styles.pickupButtonText}>
+              Review expired pickup window
+            </Text>
+          </TouchableOpacity>
+        )}
       {item.status === 'collected' && (
         <View style={styles.cardActions}>
           <TouchableOpacity

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -42,14 +42,20 @@ export function DonorPickupScreen({
   onDonationUpdated,
 }: DonorPickupScreenProps) {
   const [listing, setListing] = useState<FoodListing>(initialListing);
-  const [request, setRequest] = useState<DonationRequest | null>(null);
+  const [requestData, setRequest] = useState<DonationRequest | null>(null);
   const [listingMeta, setListingMeta] = useState<
     Pick<ListingPage, 'fromCache' | 'hasPendingWrites'>
-  >({ fromCache: false, hasPendingWrites: false });
+  >({ fromCache: true, hasPendingWrites: false });
   const [requestMeta, setRequestMeta] = useState<
     Pick<ListingPage, 'fromCache' | 'hasPendingWrites'>
-  >({ fromCache: false, hasPendingWrites: false });
+  >({ fromCache: true, hasPendingWrites: false });
 
+  const [listingReady, setListingReady] = useState(false);
+  const [requestSource, setRequestSource] = useState<string>();
+  const [listingError, setListingError] = useState('');
+  const [requestError, setRequestError] = useState('');
+  const [attempt, setAttempt] = useState(0);
+  const actionLock = useRef(false);
   const [loading, setLoading] = useState(true);
   const [busyAction, setBusyAction] = useState<
     'collect' | 'release' | 'close' | 'expire' | null
@@ -66,6 +72,8 @@ export function DonorPickupScreen({
 
     Promise.resolve().then(() => {
       if (!active) return;
+      setListingReady(false);
+      setListingError('');
       stop = subscribeToListing(
         initialListing.id,
         (updated, meta) => {
@@ -73,12 +81,17 @@ export function DonorPickupScreen({
           if (updated) {
             setListing(updated);
           }
+          setListingReady(
+            Boolean(updated) && !meta.fromCache && !meta.hasPendingWrites,
+          );
+          setListingError(updated ? '' : 'Donation no longer exists.');
           setListingMeta(meta);
           setLoading(false);
         },
         (err) => {
           if (!active) return;
-          setErrorMessage(err.message || 'Could not load donation details.');
+          setListingReady(false);
+          setListingError(err.message || 'Could not load donation details.');
           setLoading(false);
         },
       );
@@ -88,10 +101,11 @@ export function DonorPickupScreen({
       active = false;
       stop?.();
     };
-  }, [initialListing.id]);
+  }, [initialListing.id, attempt]);
 
   // Subscribe to the approved assigned request
   const assignedOrgUid = listing.acceptedOrganizationUid;
+  const request = requestSource === assignedOrgUid ? requestData : null;
   useEffect(() => {
     let active = true;
     let stop: (() => void) | undefined;
@@ -107,12 +121,19 @@ export function DonorPickupScreen({
         assignedOrgUid,
         (req, meta) => {
           if (!active) return;
+          setRequestSource(assignedOrgUid);
+          setRequestError(
+            req
+              ? ''
+              : 'The assigned request could not be found. Reload pickup details.',
+          );
           setRequest(req);
           setRequestMeta(meta);
         },
         (err) => {
           if (!active) return;
-          setErrorMessage(err.message || 'Could not load recipient request.');
+          setRequestSource(undefined);
+          setRequestError(err.message || 'Could not load recipient request.');
         },
       );
     });
@@ -121,11 +142,13 @@ export function DonorPickupScreen({
       active = false;
       stop?.();
     };
-  }, [listing.id, assignedOrgUid]);
+  }, [listing.id, assignedOrgUid, attempt]);
 
-  const isOffline = listingMeta.fromCache || requestMeta.fromCache;
+  const isOffline =
+    listingMeta.fromCache || Boolean(assignedOrgUid && requestMeta.fromCache);
   const isPendingWrites =
-    listingMeta.hasPendingWrites || requestMeta.hasPendingWrites;
+    listingMeta.hasPendingWrites ||
+    Boolean(assignedOrgUid && requestMeta.hasPendingWrites);
 
   // Evaluate collection eligibility with live second-by-second countdown
   const eligibility = checkDonorCollectionEligibility(
@@ -135,6 +158,43 @@ export function DonorPickupScreen({
     now.getTime(),
   );
 
+  const isCollected = listing.status === 'collected';
+  const isAssigned = listing.status === 'assigned';
+  const isExpired = listing.status === 'expired';
+  const isCancelled = listing.status === 'cancelled';
+  const isOverdue =
+    (listing.status === 'open' || isAssigned) &&
+    !!listing.pickupDeadline &&
+    now.getTime() >= listing.pickupDeadline.getTime();
+  const requestReady =
+    !assignedOrgUid ||
+    (!!request &&
+      request.organizationUid === assignedOrgUid &&
+      !requestMeta.fromCache &&
+      !requestMeta.hasPendingWrites &&
+      !requestError);
+  const actionsBlocked =
+    loading ||
+    !listingReady ||
+    !requestReady ||
+    !!listingError ||
+    Boolean(assignedOrgUid && requestError) ||
+    isOffline ||
+    isPendingWrites ||
+    !!busyAction;
+  const collectBlocked =
+    actionsBlocked ||
+    !isAssigned ||
+    request?.status !== 'approved' ||
+    !eligibility.canCollect;
+  const cancelBlocked = actionsBlocked || !isAssigned || isOverdue;
+  const beginAction = (action: 'collect' | 'release' | 'close' | 'expire') => {
+    if (actionLock.current) return false;
+    actionLock.current = true;
+    setBusyAction(action);
+    setErrorMessage(null);
+    return true;
+  };
   const remainingSeconds = Math.max(
     0,
     Math.floor(eligibility.remainingConfirmationMs / 1000),
@@ -165,6 +225,7 @@ export function DonorPickupScreen({
 
   // 1. Complete Collection Action
   const handleCompleteCollection = () => {
+    if (collectBlocked || actionLock.current) return;
     if (!assignedOrgUid) {
       Alert.alert('Error', 'No recipient is assigned to this donation.');
       return;
@@ -195,7 +256,7 @@ export function DonorPickupScreen({
           text: 'Complete Collection',
           style: 'default',
           onPress: async () => {
-            setBusyAction('collect');
+            if (!beginAction('collect')) return;
             setErrorMessage(null);
             try {
               await completePickupCollection(listing.id, assignedOrgUid);
@@ -217,6 +278,7 @@ export function DonorPickupScreen({
               setErrorMessage(msg);
               Alert.alert('Collection Failed', msg);
             } finally {
+              actionLock.current = false;
               setBusyAction(null);
             }
           },
@@ -227,6 +289,7 @@ export function DonorPickupScreen({
 
   // 2. Release Assignment Action (Reopens if >= 15 min left)
   const handleReleaseAssignment = () => {
+    if (cancelBlocked || actionLock.current) return;
     if (!assignedOrgUid) return;
     const canReopen =
       listing.pickupDeadline &&
@@ -242,7 +305,7 @@ export function DonorPickupScreen({
         text: canReopen ? 'Release and Reopen' : 'Cancel Listing',
         style: 'destructive',
         onPress: async () => {
-          setBusyAction('release');
+          if (!beginAction('release')) return;
           setErrorMessage(null);
           try {
             const { reopened } = await cancelApprovedDonation(
@@ -266,6 +329,7 @@ export function DonorPickupScreen({
             setErrorMessage(msg);
             Alert.alert('Action Failed', msg);
           } finally {
+            actionLock.current = false;
             setBusyAction(null);
           }
         },
@@ -275,6 +339,7 @@ export function DonorPickupScreen({
 
   // 3. Explicit Donor Close
   const handleCloseDonation = () => {
+    if (cancelBlocked || actionLock.current) return;
     if (!assignedOrgUid) return;
     Alert.alert(
       'Close Donation',
@@ -285,24 +350,23 @@ export function DonorPickupScreen({
           text: 'Yes, Close Donation',
           style: 'destructive',
           onPress: async () => {
-            setBusyAction('close');
+            if (!beginAction('close')) return;
             setErrorMessage(null);
             try {
-              await cancelApprovedDonation(
-                listing.id,
-                assignedOrgUid,
-                'close',
-              );
+              await cancelApprovedDonation(listing.id, assignedOrgUid, 'close');
               setSuccessNotice('Donation has been closed and cancelled.');
               onDonationUpdated?.();
             } catch (err) {
               const msg = accountErrorMessage(
                 err,
-                err instanceof Error ? err.message : 'Failed to close donation.',
+                err instanceof Error
+                  ? err.message
+                  : 'Failed to close donation.',
               );
               setErrorMessage(msg);
               Alert.alert('Action Failed', msg);
             } finally {
+              actionLock.current = false;
               setBusyAction(null);
             }
           },
@@ -313,7 +377,8 @@ export function DonorPickupScreen({
 
   // 4. Reconcile Expiry Action
   const handleReconcileExpiry = async () => {
-    setBusyAction('expire');
+    if (actionsBlocked || !isOverdue) return;
+    if (!beginAction('expire')) return;
     setErrorMessage(null);
     try {
       await reconcileExpiredListing(listing.id);
@@ -327,14 +392,10 @@ export function DonorPickupScreen({
       setErrorMessage(msg);
       Alert.alert('Action Failed', msg);
     } finally {
+      actionLock.current = false;
       setBusyAction(null);
     }
   };
-
-  const isCollected = listing.status === 'collected';
-  const isAssigned = listing.status === 'assigned';
-  const isExpired = listing.status === 'expired';
-  const isCancelled = listing.status === 'cancelled';
 
   return (
     <ScrollView
@@ -389,6 +450,17 @@ export function DonorPickupScreen({
         </View>
       )}
 
+      {listingError || requestError ? (
+        <View>
+          <AccountError message={listingError || requestError} />
+          <TouchableOpacity
+            accessibilityRole="button"
+            onPress={() => setAttempt((v) => v + 1)}
+          >
+            <Text>Retry pickup details</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
       {/* Main Listing Card */}
       <View style={styles.card}>
         <View style={styles.cardHeader}>
@@ -431,7 +503,8 @@ export function DonorPickupScreen({
         <View style={styles.detailsRow}>
           <Text style={styles.metaLabel}>Pickup Window:</Text>
           <Text style={styles.metaValue}>
-            {formatTime(listing.pickupStartsAt)} - {formatDate(listing.pickupDeadline)}
+            {formatTime(listing.pickupStartsAt)} -{' '}
+            {formatDate(listing.pickupDeadline)}
           </Text>
         </View>
 
@@ -483,7 +556,7 @@ export function DonorPickupScreen({
             <Text style={styles.historyValue}>
               {request?.organizationName ||
                 listing.acceptedOrganizationUid ||
-                'Verified Recipient'}
+                'Recipient details unavailable'}
             </Text>
           </View>
 
@@ -503,7 +576,9 @@ export function DonorPickupScreen({
 
           {listing.storageInstructions ? (
             <View style={styles.historyRow}>
-              <Text style={styles.historyLabel}>Storage Handled:</Text>
+              <Text style={styles.historyLabel}>
+                Donor storage instructions:
+              </Text>
               <Text style={styles.historyValue}>
                 {listing.storageInstructions}
               </Text>
@@ -512,10 +587,31 @@ export function DonorPickupScreen({
 
           <View style={styles.historyFooterNote}>
             <Text style={styles.historyNoteText}>
-              ✓ Handover verified through signed-in QR/reference collection.
-              {'\n'}This record is permanently preserved in your donor history.
+              ✓ Handover recorded through signed-in recipient confirmation and
+              donor completion.
+              {'\n'}This record is saved in your donor history.
             </Text>
           </View>
+        </View>
+      ) : isOverdue ? (
+        <View style={styles.card}>
+          <Text style={styles.expiredTitle}>Pickup deadline elapsed</Text>
+          <Text>
+            The donation can no longer be collected. Reconcile its expiry to
+            update both records.
+          </Text>
+          <TouchableOpacity
+            accessibilityRole="button"
+            disabled={actionsBlocked}
+            onPress={() => {
+              void handleReconcileExpiry();
+            }}
+            style={styles.reconcileButton}
+          >
+            <Text style={styles.reconcileButtonText}>
+              {busyAction === 'expire' ? 'Reconciling…' : 'Reconcile Expiry'}
+            </Text>
+          </TouchableOpacity>
         </View>
       ) : isAssigned ? (
         /* SECTION: Active Assigned Pickup & Handover Flow */
@@ -524,8 +620,7 @@ export function DonorPickupScreen({
           <View style={styles.recipientCard}>
             <Text style={styles.sectionHeader}>Assigned Recipient</Text>
             <Text style={styles.recipientName}>
-              {request?.organizationName ||
-                `Organization (${assignedOrgUid})`}
+              {request?.organizationName || `Organization (${assignedOrgUid})`}
             </Text>
             <Text style={styles.recipientUid}>UID: {assignedOrgUid}</Text>
 
@@ -574,7 +669,8 @@ export function DonorPickupScreen({
                 <Text
                   style={[
                     styles.statusPillText,
-                    eligibility.status === 'ready' && styles.statusPillReadyText,
+                    eligibility.status === 'ready' &&
+                      styles.statusPillReadyText,
                     eligibility.status === 'awaiting_confirmation' &&
                       styles.statusPillAwaitingText,
                     eligibility.status === 'expired_confirmation' &&
@@ -609,7 +705,8 @@ export function DonorPickupScreen({
 
             {request?.recipientConfirmedAt && (
               <Text style={styles.confirmedTimestampText}>
-                Recipient confirmed at: {formatTime(request.recipientConfirmedAt)}
+                Recipient confirmed at:{' '}
+                {formatTime(request.recipientConfirmedAt)}
               </Text>
             )}
           </View>
@@ -619,19 +716,10 @@ export function DonorPickupScreen({
             <TouchableOpacity
               accessibilityRole="button"
               accessibilityLabel="Complete Collection"
-              disabled={
-                !eligibility.canCollect ||
-                isOffline ||
-                isPendingWrites ||
-                Boolean(busyAction)
-              }
+              disabled={collectBlocked}
               style={[
                 styles.completeButton,
-                (!eligibility.canCollect ||
-                  isOffline ||
-                  isPendingWrites ||
-                  Boolean(busyAction)) &&
-                  styles.buttonDisabled,
+                collectBlocked && styles.buttonDisabled,
               ]}
               onPress={handleCompleteCollection}
             >
@@ -663,10 +751,10 @@ export function DonorPickupScreen({
             <View style={styles.cancellationButtonsRow}>
               <TouchableOpacity
                 accessibilityRole="button"
-                disabled={Boolean(busyAction) || isOffline}
+                disabled={cancelBlocked}
                 style={[
                   styles.cancelSecondaryButton,
-                  (Boolean(busyAction) || isOffline) && styles.buttonDisabled,
+                  cancelBlocked && styles.buttonDisabled,
                 ]}
                 onPress={handleReleaseAssignment}
               >
@@ -681,10 +769,10 @@ export function DonorPickupScreen({
 
               <TouchableOpacity
                 accessibilityRole="button"
-                disabled={Boolean(busyAction) || isOffline}
+                disabled={cancelBlocked}
                 style={[
                   styles.cancelDangerButton,
-                  (Boolean(busyAction) || isOffline) && styles.buttonDisabled,
+                  cancelBlocked && styles.buttonDisabled,
                 ]}
                 onPress={handleCloseDonation}
               >
@@ -704,19 +792,9 @@ export function DonorPickupScreen({
         <View style={styles.card}>
           <Text style={styles.expiredTitle}>Donation Expired</Text>
           <Text style={styles.expiredBody}>
-            The pickup deadline ({formatDate(listing.pickupDeadline)}) has elapsed.
+            The pickup deadline ({formatDate(listing.pickupDeadline)}) has
+            elapsed.
           </Text>
-          <TouchableOpacity
-            style={styles.reconcileButton}
-            disabled={Boolean(busyAction) || isOffline}
-            onPress={handleReconcileExpiry}
-          >
-            {busyAction === 'expire' ? (
-              <ActivityIndicator size="small" color="#ffffff" />
-            ) : (
-              <Text style={styles.reconcileButtonText}>Reconcile Expiry</Text>
-            )}
-          </TouchableOpacity>
         </View>
       ) : (
         /* SECTION: Cancelled or Open */

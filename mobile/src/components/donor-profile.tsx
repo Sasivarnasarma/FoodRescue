@@ -259,6 +259,7 @@ export function DonorProfile({ user }: { user: User }) {
     return (
       <View style={{ flex: 1, minHeight: 450 }}>
         <DonorPickupScreen
+          key={selectedListing.id}
           listing={selectedListing}
           onBack={() => setViewMode('feed')}
         />
@@ -297,7 +298,7 @@ export function DonorProfile({ user }: { user: User }) {
           />
         </View>
         <DonorPickupScanner
-          visible={scannerVisible}
+          visible={scannerVisible && canManage}
           onClose={() => setScannerVisible(false)}
           onSelectListing={(listing) => {
             setSelectedListing(listing);
@@ -327,7 +328,7 @@ export function DonorProfile({ user }: { user: User }) {
         secondary
       />
       <DonorPickupScanner
-        visible={scannerVisible}
+        visible={scannerVisible && canManage}
         onClose={() => setScannerVisible(false)}
         onSelectListing={(listing) => {
           setSelectedListing(listing);

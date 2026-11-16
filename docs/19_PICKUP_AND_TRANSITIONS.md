@@ -86,3 +86,7 @@ QR review: the standard payload is `foodrescue:v1:<listingId>`. Unsupported vers
 ## Donor pickup integration
 
 The donor donations feed opens assigned pickup details and collected receipts. The scanner resolves an owned listing through the shared QR/reference contract. Live listing/request listeners drive confirmation readiness, collection, assignment release, donor close and overdue expiry reconciliation. Physical Android acceptance is still pending.
+
+Donor PR review: the donor scanner wraps `QrScannerCard` and uses the same `foodrescue:v1:<listingId>` payload as the recipient display. Legacy JSON/URL parsing was removed. Lookup checks donor ownership, rejects stale callbacks after closing the scanner, and serializes repeated scans. Pickup actions wait for server-confirmed listing and matching request snapshots; load failures have a retry action. Overdue open/assigned donations offer expiry reconciliation; already-expired records do not repeat that operation. Receipt labels describe recorded donor/recipient actions without claiming that storage handling or QR scanning was independently verified.
+
+Combined review verification: 63 mobile tests and 44 rules tests pass, together with lint, formatting, TypeScript and Android bundling. Native scanning and two-phone handover still require physical-device acceptance. Recipient pickup confirmation/history and admin/demo integration remain pending tasks.

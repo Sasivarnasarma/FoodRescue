@@ -1,59 +1,32 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  generatePickupQrPayload,
-  parsePickupQrPayload,
-} from '../src/lib/pickup-qr.ts';
+  encodePickupQrPayload,
+  parsePickupReference,
+} from '../src/lib/qr-service.ts';
 import { checkDonorCollectionEligibility } from '../src/lib/pickup-validation.ts';
 
-test('parsePickupQrPayload handles empty, blank or invalid inputs', () => {
-  assert.equal(parsePickupQrPayload('').isValid, false);
-  assert.equal(parsePickupQrPayload('   ').isValid, false);
-  // @ts-expect-error testing invalid argument types
-  assert.equal(parsePickupQrPayload(null).isValid, false);
-  // @ts-expect-error testing invalid argument types
-  assert.equal(parsePickupQrPayload(undefined).isValid, false);
-});
-
-test('parsePickupQrPayload parses JSON QR payloads', () => {
-  const jsonPayload = JSON.stringify({
+test('donor scans the same versioned reference shown by the recipient', () => {
+  const payload = encodePickupQrPayload('listing_test_123');
+  assert.deepEqual(parsePickupReference(payload), {
+    valid: true,
     listingId: 'listing_test_123',
     version: 1,
   });
-  const result = parsePickupQrPayload(jsonPayload);
-  assert.equal(result.isValid, true);
-  assert.equal(result.listingId, 'listing_test_123');
-  assert.equal(result.version, 1);
+  assert.equal(parsePickupReference('listing_test_123').valid, true);
+  for (const value of [
+    '',
+    null,
+    undefined,
+    'https://example.com/listing',
+    'foodrescue://pickup?id=a',
+    'foodrescue:v99:a',
+    '{"listingId":"a","version":1}',
+    'bad/id',
+  ]) {
+    assert.equal(parsePickupReference(value).valid, false);
+  }
 });
-
-test('generatePickupQrPayload produces parseable JSON payload', () => {
-  const payload = generatePickupQrPayload('offer_xyz', 2);
-  const parsed = parsePickupQrPayload(payload);
-  assert.equal(parsed.isValid, true);
-  assert.equal(parsed.listingId, 'offer_xyz');
-  assert.equal(parsed.version, 2);
-});
-
-test('parsePickupQrPayload parses custom URL and deep link schemes', () => {
-  const queryResult = parsePickupQrPayload(
-    'foodrescue://pickup?listingId=listing_from_param',
-  );
-  assert.equal(queryResult.isValid, true);
-  assert.equal(queryResult.listingId, 'listing_from_param');
-
-  const pathResult = parsePickupQrPayload(
-    'foodrescue://pickup/listing_from_path',
-  );
-  assert.equal(pathResult.isValid, true);
-  assert.equal(pathResult.listingId, 'listing_from_path');
-});
-
-test('parsePickupQrPayload parses raw ID strings and manual reference entry', () => {
-  const rawResult = parsePickupQrPayload('donation_ref_999');
-  assert.equal(rawResult.isValid, true);
-  assert.equal(rawResult.listingId, 'donation_ref_999');
-});
-
 test('checkDonorCollectionEligibility returns outside_window when window timing is missing', () => {
   const res1 = checkDonorCollectionEligibility(null, 1_000_000, 500_000);
   assert.equal(res1.canCollect, false);
@@ -195,4 +168,16 @@ test('checkDonorCollectionEligibility accepts Date instances identically to time
   assert.equal(res.canCollect, true);
   assert.equal(res.status, 'ready');
   assert.equal(res.remainingConfirmationMs, 180_000);
+});
+
+test('donor eligibility rejects malformed clocks and reversed pickup windows', () => {
+  assert.equal(
+    checkDonorCollectionEligibility(100_000, 900_000, 150_000, NaN).canCollect,
+    false,
+  );
+  assert.equal(
+    checkDonorCollectionEligibility(900_000, 100_000, 150_000, 200_000)
+      .canCollect,
+    false,
+  );
 });
