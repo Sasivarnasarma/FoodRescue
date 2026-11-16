@@ -31,9 +31,7 @@ Member 5 implements the coordinates connection and distance resolution for recip
   - Handles GPS device lookup with loading/busy indicators, location permission denial with Settings redirect fallback, and manual coordinate input.
   - Supports clearing coordinates so recipient can choose to omit departure location without blocking request submission.
   - Provides real-time straight-line distance feedback to the listing pickup location.
-- `mobile/src/components/recipient-request-modal.tsx`:
-  - Connects the departure location picker, storage requirement affirmative checkbox, and proposed pickup window validation with `submitDonationRequest`.
-  - Subscribes to existing request status and provides withdrawal capability via `withdrawDonationRequest`.
+The shared departure card is intended for the recipient request form; there is one submission/status flow maintained with Member 2.
 
 ## Checks and deployment
 

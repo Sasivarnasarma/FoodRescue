@@ -171,6 +171,7 @@ export function DepartureLocationCard({
       {/* Toggle Manual Entry */}
       <TouchableOpacity
         accessibilityRole="button"
+        disabled={disabled || busy}
         style={styles.toggleManualButton}
         onPress={() => setShowManual((prev) => !prev)}
       >
