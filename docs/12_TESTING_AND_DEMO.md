@@ -23,7 +23,7 @@
 5. During the pickup window show the QR on phone B, scan on phone A, confirm handover on phone B, and complete on phone A. Verify both show collected.
 6. Explain why the top-ranked organization was suggested and demonstrate a stale or repeated pickup being rejected.
 
-Rehearse using synthetic data, fresh pickup windows, valid clocks, working network and camera permissions. Use manual location/reference entry and the bundled image fallback if needed. A seeded competing request must be created with the actual listing ID and valid times before showing rankings. Test the scoring function and Firestore Rules locally before the live demo. This repository currently contains the plan and starter Firebase config.
+Rehearse using synthetic data, fresh pickup windows, valid clocks, working network and camera permissions. Use manual location/reference entry and the bundled image fallback if needed. A seeded competing request must be created with the actual listing ID and valid times before showing rankings. Test the scoring function and Firestore Rules locally before the live demo. The repository includes the mobile and admin clients, Firebase rules and automated tests. Physical two-phone acceptance remains a separate demo requirement.
 
 ## Camera permission and mobile layout regression checks
 
