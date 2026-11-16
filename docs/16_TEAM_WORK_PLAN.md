@@ -72,11 +72,11 @@ All five Phase 4 implementations are reviewed. The latest integration checks pas
 
 | Member | Work | Status |
 |---|---|---|
-| 1 | Test the full donor flow on phone A, including failed publish, competing approvals, cancellation, and repeated pickup. Fix donor screen issues. | Pending |
-| 2 | Test the full recipient flow on phone B, including live updates, withdrawal, expiry, and reconnect. Fix recipient screen issues. | Pending |
-| 3 | Run Firestore Emulator tests for unauthorized access, competing approvals, oversized photos, expired pickup, and duplicate collection. Fix rule failures. | Pending |
-| 4 | Verify admin approval and audit history. Check scoring examples and prepare the demo explanation. | Pending |
-| 5 | Test GPS, camera and QR on both phones. Check denied permissions, manual fallbacks, and photo compression. | Pending |
+| 1 | Test the full donor flow on phone A, including failed publish, competing approvals, cancellation, and repeated pickup. Fix donor screen issues. | Done |
+| 2 | Test the full recipient flow on phone B, including live updates, withdrawal, expiry, and reconnect. Fix recipient screen issues. | Done |
+| 3 | Run Firestore Emulator tests for unauthorized access, competing approvals, oversized photos, expired pickup, and duplicate collection. Fix rule failures. | Done |
+| 4 | Verify admin approval and audit history. Check scoring examples and prepare the demo explanation. | Done |
+| 5 | Test GPS, camera and QR on both phones. Check denied permissions, manual fallbacks, and photo compression. | Done |
 
 **Done when** the group rehearses one complete free donation on two physical Android phones with the admin web app, and the key authorization and pickup tests pass. Run focused checks as each feature is built and use Phase 5 for the full test pass.
 
