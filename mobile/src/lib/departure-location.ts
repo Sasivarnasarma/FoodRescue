@@ -270,3 +270,125 @@ export function formatCoordinates(coords?: Coordinates | null): string {
   if (!coords) return 'None';
   return `${coords.latitude.toFixed(5)}, ${coords.longitude.toFixed(5)}`;
 }
+
+export interface SavedLocationPreference {
+  coordinates: Coordinates;
+  address: string;
+}
+
+export interface LocationStorageAdapter {
+  getItem: (key: string) => Promise<string | null> | string | null;
+  setItem: (key: string, value: string) => Promise<void> | void;
+  removeItem: (key: string) => Promise<void> | void;
+}
+
+const memoryStore = new Map<string, string>();
+const memoryStorage: LocationStorageAdapter = {
+  getItem: (key: string) => memoryStore.get(key) ?? null,
+  setItem: (key: string, value: string) => {
+    memoryStore.set(key, value);
+  },
+  removeItem: (key: string) => {
+    memoryStore.delete(key);
+  },
+};
+
+let customStorageAdapter: LocationStorageAdapter | null = null;
+
+export function setLocationStorageAdapter(
+  adapter: LocationStorageAdapter | null,
+): void {
+  customStorageAdapter = adapter;
+}
+
+async function getLocationStorage(): Promise<LocationStorageAdapter> {
+  if (customStorageAdapter) return customStorageAdapter;
+  try {
+    const { default: AsyncStorage } =
+      await import('@react-native-async-storage/async-storage');
+    if (AsyncStorage && typeof AsyncStorage.getItem === 'function') {
+      return AsyncStorage;
+    }
+  } catch {
+    // Fall back to memoryStorage
+  }
+  return memoryStorage;
+}
+
+export const RECIPIENT_SAVED_LOCATION_KEY =
+  '@foodrescue_recipient_saved_location';
+
+/**
+ * Loads the saved location preference for the recipient/organization from persistent storage.
+ */
+export async function getSavedRecipientLocation(
+  uid?: string,
+): Promise<SavedLocationPreference | null> {
+  try {
+    const storage = await getLocationStorage();
+    const key = uid
+      ? `${RECIPIENT_SAVED_LOCATION_KEY}_${uid}`
+      : RECIPIENT_SAVED_LOCATION_KEY;
+    let raw = await storage.getItem(key);
+    if (!raw && uid) {
+      raw = await storage.getItem(RECIPIENT_SAVED_LOCATION_KEY);
+    }
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (
+      parsed &&
+      typeof parsed === 'object' &&
+      parsed.coordinates &&
+      typeof parsed.coordinates.latitude === 'number' &&
+      typeof parsed.coordinates.longitude === 'number' &&
+      !isNaN(parsed.coordinates.latitude) &&
+      !isNaN(parsed.coordinates.longitude)
+    ) {
+      return {
+        coordinates: {
+          latitude: parsed.coordinates.latitude,
+          longitude: parsed.coordinates.longitude,
+        },
+        address: typeof parsed.address === 'string' ? parsed.address : '',
+      };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Persists the recipient's chosen location and address so it survives app restarts and navigation.
+ */
+export async function saveRecipientLocation(
+  coordinates: Coordinates | null,
+  address: string = '',
+  uid?: string,
+): Promise<void> {
+  try {
+    const storage = await getLocationStorage();
+    const key = uid
+      ? `${RECIPIENT_SAVED_LOCATION_KEY}_${uid}`
+      : RECIPIENT_SAVED_LOCATION_KEY;
+    if (!coordinates) {
+      await storage.removeItem(key);
+      if (uid) {
+        await storage.removeItem(RECIPIENT_SAVED_LOCATION_KEY);
+      }
+    } else {
+      const payload = JSON.stringify({ coordinates, address });
+      await storage.setItem(key, payload);
+      await storage.setItem(RECIPIENT_SAVED_LOCATION_KEY, payload);
+    }
+  } catch {
+    // Non-blocking
+  }
+}
+
+/**
+ * Clears the saved location preference.
+ */
+export async function clearSavedRecipientLocation(uid?: string): Promise<void> {
+  await saveRecipientLocation(null, '', uid);
+}

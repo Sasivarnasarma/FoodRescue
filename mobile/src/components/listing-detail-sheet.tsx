@@ -369,6 +369,17 @@ export function ListingDetailSheet({
           </Text>
         </View>
       )}
+
+      {/* Bottom Back Button to ensure easy navigation and full clearance above bottom nav bar */}
+      <View style={styles.bottomNavActions}>
+        <TouchableOpacity
+          accessibilityRole="button"
+          style={styles.bottomBackButton}
+          onPress={onBack}
+        >
+          <Text style={styles.bottomBackButtonText}>← Back to donations</Text>
+        </TouchableOpacity>
+      </View>
     </ScrollView>
   );
 }
@@ -380,7 +391,10 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 16,
-    paddingBottom: 40,
+    paddingBottom: 130,
+    width: '100%',
+    maxWidth: 600,
+    alignSelf: 'center',
   },
   backButton: {
     paddingVertical: 8,
@@ -575,5 +589,29 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#64748b',
     lineHeight: 18,
+  },
+  bottomNavActions: {
+    marginTop: 16,
+    marginBottom: 8,
+    width: '100%',
+  },
+  bottomBackButton: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  bottomBackButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#334155',
   },
 });

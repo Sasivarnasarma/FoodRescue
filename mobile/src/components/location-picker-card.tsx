@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Linking, View, Text } from 'react-native';
 import { AccountButton, AccountField, AccountError } from './donor-controls';
 import { parseCoordinates } from '../lib/listing-helpers';
@@ -33,6 +33,19 @@ export function LocationPickerCard({
   const [busy, setBusy] = useState(false);
   const lock = useRef(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    Promise.resolve().then(() => {
+      if (active && location) {
+        setLatitude(String(location.latitude));
+        setLongitude(String(location.longitude));
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [location]);
   async function gps() {
     if (lock.current) return;
     lock.current = true;

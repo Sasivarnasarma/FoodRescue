@@ -207,4 +207,11 @@ export {
   type DistanceStatus,
   type RequestDistanceInfo,
   type DistanceScoreResult,
+  type SavedLocationPreference,
+  type LocationStorageAdapter,
+  RECIPIENT_SAVED_LOCATION_KEY,
+  getSavedRecipientLocation,
+  saveRecipientLocation,
+  clearSavedRecipientLocation,
+  setLocationStorageAdapter,
 } from './departure-location';

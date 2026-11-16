@@ -436,12 +436,13 @@ export function subscribeToOrganizationRequests(
 ): Unsubscribe {
   const { db } = getFirebaseClients();
   const requestsGroup = collectionGroup(db, 'requests');
+  const pageSize = options.limit ?? 50;
   const groupQuery = query(
     requestsGroup,
     where('organizationUid', '==', organizationUid),
     orderBy('createdAt', 'desc'),
     ...(options.after ? [startAfter(options.after)] : []),
-    limit(50),
+    limit(pageSize),
   );
 
   return onSnapshot(
@@ -456,7 +457,10 @@ export function subscribeToOrganizationRequests(
       callback(requests, {
         fromCache: snapshot.metadata.fromCache,
         hasPendingWrites: snapshot.metadata.hasPendingWrites,
-        nextCursor: snapshot.docs.length === 50 ? snapshot.docs[49] : null,
+        nextCursor:
+          snapshot.docs.length >= pageSize
+            ? snapshot.docs[snapshot.docs.length - 1]
+            : null,
       });
     },
     (err) => {

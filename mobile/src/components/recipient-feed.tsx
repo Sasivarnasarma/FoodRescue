@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -20,6 +21,8 @@ import {
 import {
   calculateHaversineDistanceKm,
   formatDistance,
+  getSavedRecipientLocation,
+  saveRecipientLocation,
   type LocationCoordinates,
 } from '../lib/location-service';
 import { compareDonations } from '../lib/listing-helpers';
@@ -30,14 +33,24 @@ import { OrganizationRequestsView } from './organization-requests-view';
 export function RecipientFeed({
   initialTab = 'feed',
   readOnly = false,
+  initialLocation = null,
+  initialAddress = '',
+  onLocationChange,
 }: {
   initialTab?: 'feed' | 'requests';
   readOnly?: boolean;
+  initialLocation?: LocationCoordinates | null;
+  initialAddress?: string;
+  onLocationChange?: (
+    location: LocationCoordinates | null,
+    address: string,
+  ) => void;
 } = {}) {
   const [activeTab, setActiveTab] = useState<'feed' | 'requests'>(initialTab);
   const INITIAL_PAGE_SIZE = 10;
   const [displayLimit, setDisplayLimit] = useState(INITIAL_PAGE_SIZE);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState<{
     attempt: number;
@@ -46,8 +59,40 @@ export function RecipientFeed({
     error?: string;
   }>();
   const [recipientLocation, setRecipientLocation] =
-    useState<LocationCoordinates | null>(null);
-  const [locationAddress, setLocationAddress] = useState('');
+    useState<LocationCoordinates | null>(initialLocation);
+  const [locationAddress, setLocationAddress] = useState(initialAddress);
+
+  useEffect(() => {
+    let active = true;
+    Promise.resolve().then(() => {
+      if (initialLocation) {
+        if (active) {
+          setRecipientLocation(initialLocation);
+          setLocationAddress(initialAddress);
+        }
+        return;
+      }
+      return getSavedRecipientLocation().then((saved) => {
+        if (active && saved) {
+          setRecipientLocation(saved.coordinates);
+          setLocationAddress(saved.address);
+        }
+      });
+    });
+    return () => {
+      active = false;
+    };
+  }, [initialLocation, initialAddress]);
+
+  const handleLocationChange = (
+    coords: LocationCoordinates | null,
+    label: string,
+  ) => {
+    setRecipientLocation(coords);
+    setLocationAddress(label);
+    onLocationChange?.(coords, label);
+    void saveRecipientLocation(coords, label);
+  };
   const [editLocation, setEditLocation] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
@@ -150,6 +195,13 @@ export function RecipientFeed({
     if (loadingMore) return;
     setLoadingMore(true);
     setDisplayLimit((prev) => prev + 10);
+  };
+
+  const handleRefresh = () => {
+    setRefreshing(true);
+    setDisplayLimit(INITIAL_PAGE_SIZE);
+    setAttempt((v) => v + 1);
+    setTimeout(() => setRefreshing(false), 500);
   };
 
   const current = state?.attempt === attempt ? state : undefined;
@@ -362,6 +414,27 @@ export function RecipientFeed({
           style={styles.scroll}
           contentContainerStyle={styles.feedContent}
           keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled={true}
+          showsVerticalScrollIndicator={true}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              colors={['#167044']}
+              tintColor="#167044"
+            />
+          }
+          onScroll={({ nativeEvent }) => {
+            const { layoutMeasurement, contentOffset, contentSize } =
+              nativeEvent;
+            const isCloseToBottom =
+              layoutMeasurement.height + contentOffset.y >=
+              contentSize.height - 150;
+            if (isCloseToBottom && hasMore && !loadingMore && !state?.error) {
+              handleLoadMore();
+            }
+          }}
+          scrollEventThrottle={100}
         >
           <View style={styles.sectionHeader}>
             <Text accessibilityRole="header" style={styles.title}>
@@ -401,10 +474,7 @@ export function RecipientFeed({
               title="Your location (optional)"
               location={recipientLocation}
               address={locationAddress}
-              onLocationChange={(coords, label) => {
-                setRecipientLocation(coords);
-                setLocationAddress(label);
-              }}
+              onLocationChange={handleLocationChange}
             />
           )}
 
@@ -549,7 +619,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F4F8F5',
-    gap: 12,
   },
   scroll: {
     flex: 1,
@@ -557,7 +626,10 @@ const styles = StyleSheet.create({
   feedContent: {
     gap: 12,
     paddingHorizontal: 16,
-    paddingBottom: 24,
+    paddingBottom: 120,
+    width: '100%',
+    maxWidth: 600,
+    alignSelf: 'center',
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -574,8 +646,8 @@ const styles = StyleSheet.create({
   },
   locationBar: {
     backgroundColor: '#ffffff',
-    borderRadius: 12,
-    borderWidth: 1,
+    borderRadius: 14,
+    borderWidth: 1.5,
     borderColor: '#E2E8F0',
     padding: 12,
     flexDirection: 'row',
@@ -614,7 +686,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#ffffff',
     borderRadius: 12,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#CBD5E1',
     paddingHorizontal: 12,
     minHeight: 46,
@@ -649,7 +721,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 7,
     borderRadius: 20,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#E2E8F0',
     shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 1 },
@@ -675,7 +747,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#E2E8F0',
     shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 2 },
@@ -877,7 +949,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#E2E8F0',
     borderRadius: 12,
     padding: 4,
-    marginBottom: 4,
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 6,
+    maxWidth: 600,
+    alignSelf: 'center',
+    width: '92%',
   },
   tabItem: {
     flex: 1,
