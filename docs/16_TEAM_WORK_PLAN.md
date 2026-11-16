@@ -47,10 +47,10 @@ Implementation is integrated into main through reviewed feature branches. Physic
 | 1 | Build the donor's incoming request list, ranking explanation, and approval screen. | Pending |
 | 2 | Build whole-listing requests. Include proposed pickup time and storage confirmation. Show withdrawal and approval status. | Done |
 | 3 | Implement request rules and the atomic approval transaction. Ensure only one organization can be assigned. | Done |
-| 4 | Implement request scoring by distance and pickup timing, with storage compatibility as an eligibility check. Verify scoring with two competing requests. | Pending |
-| 5 | Connect GPS or manual coordinates to the recipient's proposed departure point. Handle unavailable distance in coordination with Members 2 and 4. | Pending |
+| 4 | Implement request scoring by distance and pickup timing, with storage compatibility as an eligibility check. Verify scoring with two competing requests. | Done |
+| 5 | Connect GPS or manual coordinates to the recipient's proposed departure point. Handle unavailable distance in coordination with Members 2 and 4. | Done |
 
-Member 2 recipient request screens, validation, and real-time status tracking (including whole-listing requests, proposed pickup time, affirmative storage declaration, withdrawal, and approval derivation) and Member 3 rules and shared request helpers are implemented and reviewed; all 30 rules tests and 12 mobile unit tests pass. Live deployment and the remaining donor screens/ranking integration are pending. See [request integration](18_REQUESTS_AND_APPROVAL.md).
+Members 3, 4 and 5 provide request rules, ranking and departure-location helpers. Recipient request screens are implemented. Donor screens and physical-device integration are still pending. See [request integration](18_REQUESTS_AND_APPROVAL.md).
 
 **Ready when** a donor can explain the order of two requests, approve one, and see the assignment update on the recipient's phone.
 

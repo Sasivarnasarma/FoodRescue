@@ -1,3 +1,4 @@
+/* global __dirname */
 const { existsSync } = require('node:fs');
 const { resolve } = require('node:path');
 const { loadEnvFile } = require('node:process');

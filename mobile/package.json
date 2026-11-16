@@ -51,6 +51,7 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test tests/listing-features.test.mjs tests/organization-verification.test.mjs tests/request-ranking.test.mjs",
     "format:check": "prettier --check ."
   },
   "private": true
