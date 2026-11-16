@@ -73,3 +73,76 @@ export function competingRequestFixtures(
     },
   ];
 }
+
+export function assignedDonationFixtures(now = Date.now()) {
+  return [
+    {
+      listing: {
+        id: 'demo-assigned-pickup',
+        title: 'DEMO assigned sandwiches',
+        category: 'Prepared Meals',
+        description:
+          'Synthetic demonstration food assigned for pickup testing.',
+        quantity: 10,
+        unit: 'portion',
+        storage: 'chilled',
+        storageInstructions: 'Keep chilled until handover',
+        allergenDeclaration: 'provided',
+        allergenInfo: 'Contains dairy and gluten',
+        pickupAddress: 'Synthetic demonstration pickup location',
+        latitude: 6.9271,
+        longitude: 79.8612,
+        starts: now - 15 * 60000,
+        deadline: now + 90 * 60000,
+        status: 'assigned',
+        acceptedOrganizationUid: 'demo-organization',
+      },
+      request: {
+        organizationUid: 'demo-organization',
+        organizationName: 'Synthetic demo-organization',
+        listingId: 'demo-assigned-pickup',
+        providerUid: 'demo-donor',
+        latitude: 6.931,
+        longitude: 79.865,
+        plannedPickupAt: now + 30 * 60000,
+        canMeetStorageRequirement: true,
+        status: 'approved',
+      },
+    },
+    {
+      listing: {
+        id: 'demo-assigned-confirmed',
+        title: 'DEMO confirmed bakery parcel',
+        category: 'Bakery',
+        description:
+          'Synthetic demonstration food with recipient confirmation already recorded.',
+        quantity: 8,
+        unit: 'item',
+        storage: 'ambient',
+        storageInstructions: 'Store in ambient dry conditions',
+        allergenDeclaration: 'provided',
+        allergenInfo: 'Contains sesame and wheat',
+        pickupAddress: 'Synthetic demonstration pickup location',
+        latitude: 6.9271,
+        longitude: 79.8612,
+        starts: now - 10 * 60000,
+        deadline: now + 60 * 60000,
+        status: 'assigned',
+        acceptedOrganizationUid: 'demo-organization',
+      },
+      request: {
+        organizationUid: 'demo-organization',
+        organizationName: 'Synthetic demo-organization',
+        listingId: 'demo-assigned-confirmed',
+        providerUid: 'demo-donor',
+        latitude: 6.931,
+        longitude: 79.865,
+        plannedPickupAt: now + 20 * 60000,
+        canMeetStorageRequirement: true,
+        status: 'approved',
+        // Confirmed 1 minute ago relative to execution; donor has 4 minutes to complete collection
+        recipientConfirmedAt: now - 60000,
+      },
+    },
+  ];
+}

@@ -1,5 +1,6 @@
 import {
   Alert,
+  Box,
   Button,
   Dialog,
   DialogActions,
@@ -11,10 +12,16 @@ import {
 } from '@mui/material';
 import { type FormEvent, useState } from 'react';
 import { firebaseErrorMessage } from '../lib/error-message';
-import { reviewProfile } from '../lib/verification';
+import { reviewProfile, validateReviewReason } from '../lib/verification';
 
 export type Decision = 'approved' | 'rejected';
-export type PendingProfile = { uid: string; name: string; role: string };
+export type PendingProfile = {
+  uid: string;
+  name: string;
+  role: string;
+  currentStatus?: string;
+  previousReason?: string;
+};
 
 export default function ReviewDialog({
   profile,
@@ -34,9 +41,8 @@ export default function ReviewDialog({
   const [error, setError] = useState('');
   const verb = decision === 'approved' ? 'Approve' : 'Reject';
   const cleanReason = reason.trim();
-  const validReason =
-    (decision === 'approved' || cleanReason.length > 0) &&
-    cleanReason.length <= 500;
+  const validation = validateReviewReason(decision, reason);
+  const validReason = validation.valid;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -74,26 +80,59 @@ export default function ReviewDialog({
               {verb} {profile.name} ({profile.role}). This decision is recorded
               in the audit history.
             </Typography>
+
+            {profile.previousReason && (
+              <Alert severity="info">
+                <Typography
+                  variant="caption"
+                  sx={{ fontWeight: 700, display: 'block' }}
+                >
+                  Previous Rejection Feedback:
+                </Typography>
+                <Typography variant="body2">
+                  {profile.previousReason}
+                </Typography>
+              </Alert>
+            )}
+
+            {decision === 'approved' && (
+              <Alert severity="success">
+                Approving this profile will grant verification to the account
+                and clear any previous rejection feedback.
+              </Alert>
+            )}
+
             {!available && !pending && (
               <Alert severity="warning">
                 This profile is no longer in the current queue, or the
                 connection was lost. Check the queue before continuing.
               </Alert>
             )}
+
             {error && <Alert severity="error">{error}</Alert>}
+
             {decision === 'rejected' && (
-              <TextField
-                label="Rejection reason"
-                name="reason"
-                value={reason}
-                onChange={(event) => setReason(event.target.value)}
-                disabled={pending}
-                required
-                fullWidth
-                autoFocus
-                slotProps={{ htmlInput: { maxLength: 500 } }}
-                helperText={`${reason.length}/500 characters`}
-              />
+              <Box>
+                <TextField
+                  label="Rejection reason / feedback"
+                  name="reason"
+                  value={reason}
+                  onChange={(event) => setReason(event.target.value)}
+                  disabled={pending}
+                  required
+                  fullWidth
+                  multiline
+                  minRows={2}
+                  autoFocus
+                  slotProps={{ htmlInput: { maxLength: 500 } }}
+                  helperText={
+                    validation.error
+                      ? validation.error
+                      : `${reason.length}/500 characters`
+                  }
+                  error={!validation.valid && reason.length > 0}
+                />
+              </Box>
             )}
           </Stack>
         </DialogContent>

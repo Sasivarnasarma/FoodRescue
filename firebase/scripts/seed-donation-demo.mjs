@@ -4,6 +4,7 @@ import { getAuth } from 'firebase-admin/auth';
 import {
   donationFixtures,
   competingRequestFixtures,
+  assignedDonationFixtures,
 } from './demo-fixtures.mjs';
 if (
   !process.env.FIRESTORE_EMULATOR_HOST ||
@@ -93,6 +94,54 @@ if (urgentNear) {
       });
   }
 }
+
+const assignedFixtures = assignedDonationFixtures();
+for (const { listing, request } of assignedFixtures) {
+  await db.doc(`foodListings/${listing.id}`).set({
+    providerUid: 'demo-donor',
+    providerName: 'Synthetic demo-donor',
+    title: listing.title,
+    description: listing.description,
+    category: listing.category,
+    quantity: listing.quantity,
+    unit: listing.unit,
+    storageRequirement: listing.storage,
+    storageInstructions: listing.storageInstructions,
+    allergenDeclaration: listing.allergenDeclaration,
+    allergenInfo: listing.allergenInfo,
+    pickupAddress: listing.pickupAddress,
+    pickupLocation: new GeoPoint(listing.latitude, listing.longitude),
+    pickupStartsAt: Timestamp.fromMillis(listing.starts),
+    pickupDeadline: Timestamp.fromMillis(listing.deadline),
+    status: listing.status,
+    acceptedOrganizationUid: listing.acceptedOrganizationUid,
+    createdAt: Timestamp.now(),
+    updatedAt: Timestamp.now(),
+  });
+
+  const requestRecord = {
+    organizationUid: request.organizationUid,
+    providerUid: request.providerUid,
+    organizationName: request.organizationName,
+    departureLocation: new GeoPoint(request.latitude, request.longitude),
+    plannedPickupAt: Timestamp.fromMillis(request.plannedPickupAt),
+    canMeetStorageRequirement: request.canMeetStorageRequirement,
+    status: request.status,
+    createdAt: Timestamp.now(),
+    updatedAt: Timestamp.now(),
+  };
+
+  if (typeof request.recipientConfirmedAt === 'number') {
+    requestRecord.recipientConfirmedAt = Timestamp.fromMillis(
+      request.recipientConfirmedAt,
+    );
+  }
+
+  await db
+    .doc(`foodListings/${listing.id}/requests/${request.organizationUid}`)
+    .set(requestRecord);
+}
+
 console.log(
-  'Seeded 4 synthetic accounts, 4 demo listings, and 2 competing requests in the emulators.',
+  'Seeded 4 synthetic accounts, 4 demo listings, 2 competing requests, and 2 assigned pickup listings (demo-assigned-pickup ready for recipient confirmation; demo-assigned-confirmed pre-stamped, valid for donor collection within 4 minutes of this run).',
 );

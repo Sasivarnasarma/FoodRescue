@@ -57,3 +57,20 @@ pnpm --dir firebase exec firebase deploy --only firestore:rules --project foodre
 ```
 
 No deployment was performed during this review. After the other pickup screens are integrated, rehearse on two physical Android devices: confirm then collect, clear and reconfirm, let confirmation expire, cancel with and without enough remaining time, close as donor, and reconcile an overdue assignment. Verify both devices show the same committed state and denied/duplicate actions show errors. Physical testing is pending; automated checks do not verify QR camera behavior.
+
+## Assigned donation demo data (Member 4)
+
+`assignedDonationFixtures(now)` in `firebase/scripts/demo-fixtures.mjs` provides two synthetic assigned donations for `demo-organization`, each with a matching approved request. Times are relative to when the seed runs:
+
+- `demo-assigned-pickup`: pickup window started 15 minutes ago and ends in 90 minutes. Use it to rehearse recipient confirmation on phone B, then donor collection on phone A.
+- `demo-assigned-confirmed`: `recipientConfirmedAt` is set one minute before the seed runs, so the donor can rehearse collection immediately. Collection must happen within five minutes of confirmation, so this record becomes stale about four minutes after seeding. Re-run the seed, or clear and reconfirm on the recipient phone, to rehearse again.
+
+`seed-donation-demo.mjs` seeds these only when both the Auth and Firestore emulators are configured, and always uses project `demo-foodrescue`. It never writes to the live project. With the emulators running:
+
+```powershell
+pnpm --dir firebase exec node scripts/seed-donation-demo.mjs
+```
+
+## Admin verification feedback and audit history (Member 4)
+
+The admin profile details view streams that profile's audit records through `profileAuditsQuery(targetUid)` in `admin/src/lib/verification.ts`, newest first, showing the decision, time, reviewing admin and reason. The review dialog shows any previous rejection feedback. Rejection reasons are validated by `validateReviewReason` (1–500 characters), and approval clears the previous reason. The review history list links each record to the profile details view.
