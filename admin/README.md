@@ -15,6 +15,7 @@ Open the local URL printed by Vite. Run the checks and production build from thi
 pnpm lint
 pnpm format:check
 pnpm typecheck
+pnpm test
 pnpm build
 ```
 
@@ -36,3 +37,5 @@ same project and Phase 1 Firestore Rules as the Android app.
 5. Disconnect the browser. Review controls must be disabled until current server records return. Sign out and confirm the directory and history disappear.
 
 Deploy the changed Firestore rules before testing against the live project. See the Firebase README for deployment instructions.
+
+From the repository root, `pnpm test:admin` tests the actual review validation and server-snapshot action guards. Profile details show the current feedback and server-ordered audit history in pages of 50, with retry and cached-data states. Deploy the `adminAuditLogs` composite index before using this history in the live project; see the Firebase README. Approval changes verification only and does not reactivate suspended accounts.

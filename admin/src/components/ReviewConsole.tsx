@@ -174,10 +174,6 @@ export default function ReviewConsole({ canReview }: { canReview: boolean }) {
   const audit = useLiveList(profileReviewHistoryQuery, auditAttempt);
   const queueCurrent = queue.status === 'ready' && !queue.cached && online;
   const reviewEnabled = queueCurrent && canReview;
-  const selectedPending =
-    queue.status === 'ready' &&
-    queue.rows.some(({ id }) => id === selected?.profile.uid);
-
   return (
     <Stack spacing={3}>
       <Box>
@@ -228,6 +224,8 @@ export default function ReviewConsole({ canReview }: { canReview: boolean }) {
           >
             {queue.status === 'ready' &&
               queue.rows.map(({ id, data }) => {
+                const isApproved = data.verificationStatus === 'approved';
+                const isRejected = data.verificationStatus === 'rejected';
                 const profile: PendingProfile = {
                   uid: id,
                   name:
@@ -238,6 +236,11 @@ export default function ReviewConsole({ canReview }: { canReview: boolean }) {
                     data.type === 'provider'
                       ? 'Donor business'
                       : 'Recipient organization',
+                  currentStatus: String(data.verificationStatus ?? 'pending'),
+                  previousReason:
+                    typeof data.rejectionReason === 'string'
+                      ? data.rejectionReason
+                      : '',
                 };
 
                 return (
@@ -264,14 +267,40 @@ export default function ReviewConsole({ canReview }: { canReview: boolean }) {
                       <Typography variant="caption" color="text.secondary">
                         {id}
                       </Typography>
+                      {isRejected && profile.previousReason && (
+                        <Typography
+                          variant="body2"
+                          color="error.main"
+                          sx={{ fontStyle: 'italic', mt: 0.5 }}
+                        >
+                          Rejection feedback: {profile.previousReason}
+                        </Typography>
+                      )}
                     </Box>
-                    <Stack direction="row" spacing={1}>
+                    <Stack
+                      direction="row"
+                      spacing={1}
+                      sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 1 }}
+                    >
                       <Button onClick={() => setDetails(id)}>
                         View details
                       </Button>
                       <Chip
-                        label={String(data.verificationStatus)}
+                        label={
+                          isApproved
+                            ? 'Approved'
+                            : isRejected
+                              ? 'Rejected'
+                              : 'Pending'
+                        }
                         size="small"
+                        color={
+                          isApproved
+                            ? 'success'
+                            : isRejected
+                              ? 'error'
+                              : 'warning'
+                        }
                       />
                       <Button
                         variant="outlined"
@@ -379,25 +408,59 @@ export default function ReviewConsole({ canReview }: { canReview: boolean }) {
                     )}
                   </Stack>
                   <Typography>{data.reason}</Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Profile UID {data.targetUid}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Reviewed by {data.adminUid}
-                  </Typography>
+                  <Stack
+                    direction={{ xs: 'column', sm: 'row' }}
+                    spacing={2}
+                    sx={{
+                      alignItems: { sm: 'center' },
+                      justifyContent: 'space-between',
+                      mt: 0.5,
+                    }}
+                  >
+                    <Box>
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ display: 'block' }}
+                      >
+                        Profile UID {data.targetUid}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Reviewed by {data.adminUid}
+                      </Typography>
+                    </Box>
+                    <Button
+                      size="small"
+                      variant="text"
+                      onClick={() => setDetails(data.targetUid)}
+                    >
+                      View profile & audit trail
+                    </Button>
+                  </Stack>
                 </Stack>
               ))}
           </ListState>
         </Stack>
       </Paper>
       {details && (
-        <ProfileDetails uid={details} onClose={() => setDetails(null)} />
+        <ProfileDetails
+          key={details}
+          uid={details}
+          canReview={canReview && online}
+          onClose={() => setDetails(null)}
+          onReview={(profile, decision) => {
+            setDetails(null);
+            setNotice('');
+            setSelected({ profile, decision });
+          }}
+        />
       )}
       {selected && (
         <ReviewDialog
+          key={`${selected.profile.uid}:${selected.decision}`}
           profile={selected.profile}
           decision={selected.decision}
-          available={reviewEnabled && selectedPending}
+          available={canReview && online}
           onClose={() => setSelected(null)}
           onDone={() => {
             setNotice(`${selected.profile.name} was ${selected.decision}.`);

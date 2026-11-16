@@ -59,3 +59,13 @@ Manual integration check: publish without a photo on donor phone A, verify live 
 For the combined Phase 2 screens and emulator-only seed data, see [the integration checklist](../docs/17_PHASE2_INTEGRATION.md).
 
 For Phase 4 confirmation, collection, cancellation and expiry rules, helper APIs and remaining manual checks, see [pickup integration](../docs/19_PICKUP_AND_TRANSITIONS.md). Deploy the reviewed rules before using these operations against the live project.
+
+## Per-profile audit history
+
+The admin client uses `profileAuditsQuery(targetUid, cursor?)` for newest-first pages of 50 audit records. Deploy the `adminAuditLogs` collection index on `targetUid` ascending and `createdAt` descending before live use:
+
+```powershell
+pnpm --dir firebase exec firebase deploy --only firestore:indexes --project foodrescue-4ff0b
+```
+
+Wait until the index is ready. Existing admin-only audit read rules remain unchanged. Rules tests cover ordering, pagination and denied applicant reads. See [pickup integration](../docs/19_PICKUP_AND_TRANSITIONS.md) for emulator-only assigned pickup fixtures and the manual verification checklist.

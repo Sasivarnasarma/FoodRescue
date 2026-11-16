@@ -1,6 +1,6 @@
 # Phase 4 pickup rules and shared helpers
 
-Members 1, 2, 3 and 5 provide donor and recipient pickup screens, shared data operations and rules, QR scanning/display, manual references and foreground reminders. Member 4 admin/demo integration and physical-device acceptance remain pending.
+Members 1, 2, 3 and 5 provide donor and recipient pickup screens, shared data operations and rules, QR scanning/display, manual references and foreground reminders. Member 4 provides admin verification feedback/audit history and assigned-donation demo data. Physical-device acceptance remains pending.
 
 ## Pickup contract
 
@@ -12,13 +12,13 @@ The QR identifies an opaque listing reference and version; it grants no authorit
 
 ## Cancellation and expiry
 
-| Action | Result |
-|---|---|
-| Either participant releases an assignment with at least 15 minutes remaining | Listing becomes open; selected request becomes cancelled |
-| Either participant releases with less than 15 minutes remaining, before deadline | Listing and selected request become cancelled |
-| Donor explicitly closes an assignment before deadline | Listing and selected request become cancelled, even with 15 minutes or more remaining |
-| Assigned recipient attempts to close with at least 15 minutes remaining | Rejected; release must reopen the listing |
-| Owning donor, admin or assigned organization reconciles at/after deadline | Open listing expires; an assigned listing and its selected request expire atomically |
+| Action                                                                           | Result                                                                                |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Either participant releases an assignment with at least 15 minutes remaining     | Listing becomes open; selected request becomes cancelled                              |
+| Either participant releases with less than 15 minutes remaining, before deadline | Listing and selected request become cancelled                                         |
+| Donor explicitly closes an assignment before deadline                            | Listing and selected request become cancelled, even with 15 minutes or more remaining |
+| Assigned recipient attempts to close with at least 15 minutes remaining          | Rejected; release must reopen the listing                                             |
+| Owning donor, admin or assigned organization reconciles at/after deadline        | Open listing expires; an assigned listing and its selected request expire atomically  |
 
 Cancellation and assigned expiry clear both `acceptedOrganizationUid` and `recipientConfirmedAt`. Other pending requests stay unchanged. After reopening, an organization whose request was cancelled cannot resubmit for that listing; other pending proposals are eligible only if still valid. Closed listings cannot reopen. Removing confirmation competes safely with collection: they cannot both succeed against the same approved state.
 
@@ -81,6 +81,7 @@ pnpm --dir firebase exec firebase deploy --only firestore:rules --project foodre
 ```
 
 No deployment was performed during this review. After the other pickup screens are integrated, rehearse on two physical Android devices: confirm then collect, clear and reconfirm, let confirmation expire, cancel with and without enough remaining time, close as donor, and reconcile an overdue assignment. Verify both devices show the same committed state and denied/duplicate actions show errors. Physical testing is pending; automated checks do not verify QR camera behavior.
+
 QR review: the standard payload is `foodrescue:v1:<listingId>`. Unsupported versions and arbitrary URLs are rejected. Render at least four white modules around the QR for scanning. Reference text is selectable for native copy. Optional reminders are foreground alerts while the pickup card is open; no background notification is scheduled. A failed preference save is shown as an error. Scanner events and manual lookup share one submission lock, and the camera is paused after a scan or when inactive.
 
 ## Donor pickup integration
@@ -89,7 +90,7 @@ The donor donations feed opens assigned pickup details and collected receipts. T
 
 Donor PR review: the donor scanner wraps `QrScannerCard` and uses the same `foodrescue:v1:<listingId>` payload as the recipient display. Legacy JSON/URL parsing was removed. Lookup checks donor ownership, rejects stale callbacks after closing the scanner, and serializes repeated scans. Pickup actions wait for server-confirmed listing and matching request snapshots; load failures have a retry action. Overdue open/assigned donations offer expiry reconciliation; already-expired records do not repeat that operation. Receipt labels describe recorded donor/recipient actions without claiming that storage handling or QR scanning was independently verified.
 
-Combined review verification: 63 mobile tests and 44 rules tests pass, together with lint, formatting, TypeScript and Android bundling. Native scanning and two-phone handover still require physical-device acceptance. Recipient pickup confirmation/history and admin/demo integration remain pending tasks.
+Combined review verification: 63 mobile tests and 44 rules tests pass, together with lint, formatting, TypeScript and Android bundling. Native scanning and two-phone handover still require physical-device acceptance. Recipient pickup confirmation/history and admin/demo integration are covered in the following sections.
 
 ## Recipient pickup integration
 
@@ -98,3 +99,32 @@ Recipient pickup details include the shared QR reference, signed-in confirmation
 Recipient PR review: pickup uses the shared real QR generator and preserves the original case-sensitive listing ID as the manual reference. Confirmation and expiry actions require the matching selected organization, valid pickup timing and confirmed server metadata; pending writes block actions and duplicate mutations are serialized. Collection receipts/history require both the matching request and parent listing to be collected for the current organization. A donation collected by another organization is labelled accordingly and is excluded from own collection history. Invalid windows and stale/future confirmations do not enable handover.
 
 Latest recipient integration checks: 71 mobile tests and 44 rules tests, mobile lint, formatting, TypeScript and Android bundling pass. Physical camera scanning, two-phone confirmation/collection and background/foreground behavior remain manual acceptance steps.
+
+## Assigned donation demo data (Member 4)
+
+`assignedDonationFixtures(now)` in `firebase/scripts/demo-fixtures.mjs` provides two synthetic assigned donations for `demo-organization`, each with a matching approved request. Times are relative to when the seed runs:
+
+- `demo-assigned-pickup`: pickup window started 15 minutes ago and ends in 90 minutes. It models recipient confirmation followed by donor collection in an isolated emulator rehearsal.
+- `demo-assigned-confirmed`: `recipientConfirmedAt` is set one minute before the seed runs, so the donor can rehearse collection immediately. Collection must happen within five minutes of confirmation, so this record becomes stale about four minutes after seeding. Re-run the seed, or clear and reconfirm on the recipient phone, to rehearse again.
+
+`seed-donation-demo.mjs` seeds these only when both the Auth and Firestore emulators are configured, and always uses project `demo-foodrescue`. It never writes to the live project. Each assigned listing and its approved request are written in one atomic batch. The regular mobile and admin clients use the live project from the root .env; this seed does not make fixtures appear there or automatically connect clients to emulators. Use these fixtures for isolated emulator checks. For the live two-phone rehearsal, create synthetic accounts and donations through the app and approve accounts through the admin client. Run the isolated seed from the repository root:
+
+```powershell
+pnpm --dir firebase exec firebase emulators:exec --only auth,firestore --project demo-foodrescue "node scripts/seed-donation-demo.mjs"
+```
+
+## Admin verification feedback and audit history (Member 4)
+
+The admin profile details view streams that profile's audit records through `profileAuditsQuery(targetUid, cursor?)` in `admin/src/lib/verification.ts`, newest first, showing the decision, time, reviewing admin and reason. The review dialog shows any previous rejection feedback. Rejection reasons are validated by `validateReviewReason` (1–500 characters), and approval clears the previous reason. The review history list links each record to the profile details view.
+
+The server orders audit records by creation time before applying the 50-record limit. Older/previous controls use document cursors. Loading failures are shown separately from empty history, with retry and cached-data feedback. Review actions require a current server-confirmed profile even when opened from an audit entry outside the current directory page. Duplicate submissions are blocked. Approving a profile clears its rejection reason but does not reactivate a suspended account.
+
+Deploy the new audit index, then wait for it to finish building:
+
+```powershell
+pnpm --dir firebase exec firebase deploy --only firestore:indexes --project foodrescue-4ff0b
+```
+
+No deployment was performed during the review. Review checks pass 73 mobile tests, 3 admin tests and 45 Firestore rules tests, plus admin/mobile lint, TypeScript and formatting checks and an admin production build. The emulator-only seed also runs successfully. Formatting checks on Windows use `--end-of-line auto` for the existing checkout line endings.
+
+Manual acceptance: open a profile from both the directory and review history, browse its older reviews, reject with a reason, then approve without one. Verify Android receives the latest decision and the approval clears feedback. Disconnect the browser and confirm actions are disabled; reconnect and retry failed reads. Test profile history outside the first directory page. Physical-device handover and Phase 5 acceptance remain pending.

@@ -1,6 +1,14 @@
 {
   "indexes": [
     {
+      "collectionGroup": "adminAuditLogs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "targetUid", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "foodListings",
       "queryScope": "COLLECTION",
       "fields": [
