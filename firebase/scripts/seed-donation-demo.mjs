@@ -97,7 +97,8 @@ if (urgentNear) {
 
 const assignedFixtures = assignedDonationFixtures();
 for (const { listing, request } of assignedFixtures) {
-  await db.doc(`foodListings/${listing.id}`).set({
+  const batch = db.batch();
+  batch.set(db.doc(`foodListings/${listing.id}`), {
     providerUid: 'demo-donor',
     providerName: 'Synthetic demo-donor',
     title: listing.title,
@@ -137,9 +138,11 @@ for (const { listing, request } of assignedFixtures) {
     );
   }
 
-  await db
-    .doc(`foodListings/${listing.id}/requests/${request.organizationUid}`)
-    .set(requestRecord);
+  batch.set(
+    db.doc(`foodListings/${listing.id}/requests/${request.organizationUid}`),
+    requestRecord,
+  );
+  await batch.commit();
 }
 
 console.log(

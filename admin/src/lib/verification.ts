@@ -9,7 +9,11 @@ import {
   startAfter,
   where,
   Timestamp,
+  type QueryDocumentSnapshot,
+  type DocumentData,
 } from 'firebase/firestore';
+import { validateReviewReason } from './review-validation';
+export { validateReviewReason } from './review-validation';
 import { getFirebaseClients } from './firebase';
 
 export interface AdminAuditRecord {
@@ -21,35 +25,6 @@ export interface AdminAuditRecord {
   previousStatus: 'pending' | 'approved' | 'rejected' | string;
   newStatus: 'approved' | 'rejected' | string;
   createdAt: Timestamp | null;
-}
-
-export function validateReviewReason(
-  decision: 'approved' | 'rejected',
-  reason: string,
-): { valid: boolean; error?: string } {
-  const clean = reason.trim();
-  if (decision === 'rejected') {
-    if (!clean) {
-      return {
-        valid: false,
-        error: 'Enter a review reason up to 500 characters.',
-      };
-    }
-    if (clean.length > 500) {
-      return {
-        valid: false,
-        error: 'Enter a review reason up to 500 characters.',
-      };
-    }
-  } else {
-    if (clean.length > 500) {
-      return {
-        valid: false,
-        error: 'Reason must not exceed 500 characters.',
-      };
-    }
-  }
-  return { valid: true };
 }
 
 export function profilesQuery(cursor?: string) {
@@ -71,11 +46,16 @@ export function profileReviewHistoryQuery() {
   );
 }
 
-export function profileAuditsQuery(targetUid: string) {
+export function profileAuditsQuery(
+  targetUid: string,
+  cursor?: QueryDocumentSnapshot<DocumentData>,
+) {
   const { db } = getFirebaseClients();
   return query(
     collection(db, 'adminAuditLogs'),
     where('targetUid', '==', targetUid),
+    orderBy('createdAt', 'desc'),
+    ...(cursor ? [startAfter(cursor)] : []),
     limit(50),
   );
 }

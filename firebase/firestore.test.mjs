@@ -1874,3 +1874,65 @@ test('collection and recipient retraction cannot both succeed concurrently', asy
     assert.equal('recipientConfirmedAt' in child, false);
   }
 });
+
+test('per-profile audit history returns the newest 50 reviews with private pagination', async () => {
+  await env.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    const batch = writeBatch(db);
+    for (let i = 0; i < 53; i++)
+      batch.set(
+        doc(db, 'adminAuditLogs', `history-${String(i).padStart(3, '0')}`),
+        {
+          targetUid: 'audited-profile',
+          adminUid: 'reviewer',
+          action: 'review_profile',
+          reason: '',
+          previousStatus: 'pending',
+          newStatus: 'approved',
+          createdAt: Timestamp.fromMillis(1_000 + i),
+        },
+      );
+    batch.set(doc(db, 'adminAuditLogs', 'unrelated-profile'), {
+      targetUid: 'other',
+      createdAt: Timestamp.fromMillis(99_999),
+    });
+    await batch.commit();
+  });
+  const db = admin();
+  const base = [
+    where('targetUid', '==', 'audited-profile'),
+    orderBy('createdAt', 'desc'),
+  ];
+  const first = await assertSucceeds(
+    getDocs(query(collection(db, 'adminAuditLogs'), ...base, limit(50))),
+  );
+  assert.equal(first.size, 50);
+  assert.equal(first.docs[0].id, 'history-052');
+  assert.equal(first.docs[49].id, 'history-003');
+  const second = await assertSucceeds(
+    getDocs(
+      query(
+        collection(db, 'adminAuditLogs'),
+        ...base,
+        startAfter(first.docs[49]),
+        limit(50),
+      ),
+    ),
+  );
+  assert.deepEqual(
+    second.docs.map((item) => item.id),
+    ['history-002', 'history-001', 'history-000'],
+  );
+  await assertFails(
+    getDocs(
+      query(
+        collection(applicant('audited-profile'), 'adminAuditLogs'),
+        ...base,
+        limit(50),
+      ),
+    ),
+  );
+  await assertFails(
+    getDocs(query(collection(db, 'adminAuditLogs'), ...base, limit(51))),
+  );
+});

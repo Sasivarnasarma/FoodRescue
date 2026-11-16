@@ -10,8 +10,11 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { firebaseErrorMessage } from '../lib/error-message';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { getFirebaseClients } from '../lib/firebase';
+import { isReviewableSnapshot } from '../lib/review-validation';
 import { reviewProfile, validateReviewReason } from '../lib/verification';
 
 export type Decision = 'approved' | 'rejected';
@@ -36,6 +39,43 @@ export default function ReviewDialog({
   onClose: () => void;
   onDone: () => void;
 }) {
+  const [source, setSource] = useState<{
+    data: Record<string, unknown> | null;
+    fromCache: boolean;
+    hasPendingWrites: boolean;
+    error?: string;
+  }>();
+  const lock = useRef(false);
+  useEffect(() => {
+    const { db } = getFirebaseClients();
+    return onSnapshot(
+      doc(db, 'profiles', profile.uid),
+      { includeMetadataChanges: true },
+      (snapshot) => {
+        setSource({
+          data: snapshot.data() ?? null,
+          fromCache: snapshot.metadata.fromCache,
+          hasPendingWrites: snapshot.metadata.hasPendingWrites,
+        });
+      },
+      () =>
+        setSource({
+          data: null,
+          fromCache: true,
+          hasPendingWrites: false,
+          error: 'Could not load current profile. Close and retry.',
+        }),
+    );
+  }, [profile.uid]);
+  const ready =
+    available &&
+    !!source &&
+    !source.error &&
+    isReviewableSnapshot(source.data, source);
+  const previousReason =
+    typeof source?.data?.rejectionReason === 'string'
+      ? source.data.rejectionReason
+      : '';
   const [reason, setReason] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
@@ -46,7 +86,8 @@ export default function ReviewDialog({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!validReason || !available || pending) return;
+    if (!validReason || !ready || pending || lock.current) return;
+    lock.current = true;
 
     setError('');
     setPending(true);
@@ -60,6 +101,7 @@ export default function ReviewDialog({
           'The review could not be saved. Try again.',
         ),
       );
+      lock.current = false;
       setPending(false);
     }
   }
@@ -81,7 +123,7 @@ export default function ReviewDialog({
               in the audit history.
             </Typography>
 
-            {profile.previousReason && (
+            {previousReason && (
               <Alert severity="info">
                 <Typography
                   variant="caption"
@@ -89,9 +131,7 @@ export default function ReviewDialog({
                 >
                   Previous Rejection Feedback:
                 </Typography>
-                <Typography variant="body2">
-                  {profile.previousReason}
-                </Typography>
+                <Typography variant="body2">{previousReason}</Typography>
               </Alert>
             )}
 
@@ -102,13 +142,14 @@ export default function ReviewDialog({
               </Alert>
             )}
 
-            {!available && !pending && (
+            {!ready && !pending && (
               <Alert severity="warning">
-                This profile is no longer in the current queue, or the
-                connection was lost. Check the queue before continuing.
+                Waiting for current profile information. Reconnect or close and
+                retry if the profile is unavailable.
               </Alert>
             )}
 
+            {source?.error && <Alert severity="error">{source.error}</Alert>}
             {error && <Alert severity="error">{error}</Alert>}
 
             {decision === 'rejected' && (
@@ -125,11 +166,7 @@ export default function ReviewDialog({
                   minRows={2}
                   autoFocus
                   slotProps={{ htmlInput: { maxLength: 500 } }}
-                  helperText={
-                    validation.error
-                      ? validation.error
-                      : `${reason.length}/500 characters`
-                  }
+                  helperText={`${reason.length}/500 characters${validation.error ? ` — ${validation.error}` : ``}`}
                   error={!validation.valid && reason.length > 0}
                 />
               </Box>
@@ -144,7 +181,7 @@ export default function ReviewDialog({
             type="submit"
             variant="contained"
             color={decision === 'approved' ? 'primary' : 'error'}
-            disabled={!validReason || !available}
+            disabled={!validReason || !ready}
             loading={pending}
           >
             Confirm {verb.toLowerCase()}

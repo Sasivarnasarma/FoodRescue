@@ -12,6 +12,7 @@
     "format:check": "pnpm -r --if-present run format:check",
     "typecheck": "pnpm -r --if-present run typecheck",
     "test:rules": "pnpm --filter foodrescue-firebase test",
+    "test:admin": "pnpm --filter foodrescue-admin test",
     "test:mobile": "pnpm --filter foodrescue-mobile test",
     "test:auth": "pnpm --filter foodrescue-firebase test:auth"
   }

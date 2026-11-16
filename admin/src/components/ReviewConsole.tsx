@@ -174,10 +174,6 @@ export default function ReviewConsole({ canReview }: { canReview: boolean }) {
   const audit = useLiveList(profileReviewHistoryQuery, auditAttempt);
   const queueCurrent = queue.status === 'ready' && !queue.cached && online;
   const reviewEnabled = queueCurrent && canReview;
-  const selectedPending =
-    queue.status === 'ready' &&
-    queue.rows.some(({ id }) => id === selected?.profile.uid);
-
   return (
     <Stack spacing={3}>
       <Box>
@@ -448,8 +444,9 @@ export default function ReviewConsole({ canReview }: { canReview: boolean }) {
       </Paper>
       {details && (
         <ProfileDetails
+          key={details}
           uid={details}
-          canReview={reviewEnabled}
+          canReview={canReview && online}
           onClose={() => setDetails(null)}
           onReview={(profile, decision) => {
             setDetails(null);
@@ -460,9 +457,10 @@ export default function ReviewConsole({ canReview }: { canReview: boolean }) {
       )}
       {selected && (
         <ReviewDialog
+          key={`${selected.profile.uid}:${selected.decision}`}
           profile={selected.profile}
           decision={selected.decision}
-          available={reviewEnabled && selectedPending}
+          available={canReview && online}
           onClose={() => setSelected(null)}
           onDone={() => {
             setNotice(`${selected.profile.name} was ${selected.decision}.`);

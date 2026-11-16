@@ -1,36 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import {
-  assignedDonationFixtures,
-  donationFixtures,
-  competingRequestFixtures,
-} from '../../firebase/scripts/demo-fixtures.mjs';
-
-function validateReviewReason(decision, reason) {
-  const clean = typeof reason === 'string' ? reason.trim() : '';
-  if (decision === 'rejected') {
-    if (!clean) {
-      return {
-        valid: false,
-        error: 'Enter a review reason up to 500 characters.',
-      };
-    }
-    if (clean.length > 500) {
-      return {
-        valid: false,
-        error: 'Enter a review reason up to 500 characters.',
-      };
-    }
-  } else {
-    if (clean.length > 500) {
-      return {
-        valid: false,
-        error: 'Reason must not exceed 500 characters.',
-      };
-    }
-  }
-  return { valid: true };
-}
+import { assignedDonationFixtures } from '../../firebase/scripts/demo-fixtures.mjs';
 
 test('assignedDonationFixtures produces valid assigned listings and approved requests', () => {
   const now = 1700000000000;
@@ -121,38 +91,4 @@ test('assigned listings comply with database schema constraints', () => {
     assert.ok(request.plannedPickupAt >= listing.starts);
     assert.ok(request.plannedPickupAt <= listing.deadline);
   }
-});
-
-test('validateReviewReason enforces rejection feedback and character limit', () => {
-  // Rejection requires a non-empty reason up to 500 characters
-  assert.equal(validateReviewReason('rejected', '').valid, false);
-  assert.equal(validateReviewReason('rejected', '   ').valid, false);
-  assert.equal(validateReviewReason('rejected', null).valid, false);
-  assert.equal(validateReviewReason('rejected', 'a'.repeat(501)).valid, false);
-  assert.equal(
-    validateReviewReason('rejected', 'Food safety certificate expired.').valid,
-    true,
-  );
-  assert.equal(validateReviewReason('rejected', 'a'.repeat(500)).valid, true);
-
-  // Approval permits empty reason or notes up to 500 characters
-  assert.equal(validateReviewReason('approved', '').valid, true);
-  assert.equal(validateReviewReason('approved', '   ').valid, true);
-  assert.equal(validateReviewReason('approved', 'a'.repeat(500)).valid, true);
-  assert.equal(validateReviewReason('approved', 'a'.repeat(501)).valid, false);
-});
-
-test('in-memory audit sorting orders newest timestamps first', () => {
-  const auditEntries = [
-    { id: '1', createdAtMillis: 1000, newStatus: 'rejected' },
-    { id: '2', createdAtMillis: 3000, newStatus: 'approved' },
-    { id: '3', createdAtMillis: 2000, newStatus: 'rejected' },
-  ];
-
-  auditEntries.sort((a, b) => b.createdAtMillis - a.createdAtMillis);
-
-  assert.deepEqual(
-    auditEntries.map((e) => e.id),
-    ['2', '3', '1'],
-  );
 });

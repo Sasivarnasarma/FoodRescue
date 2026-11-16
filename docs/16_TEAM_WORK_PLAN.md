@@ -64,7 +64,7 @@ Members 3, 4 and 5 provide request rules, ranking and departure-location helpers
 | 4 | Connect verification feedback and audit history to the admin review flow. Prepare an assigned donation with valid pickup times for integration. | Done |
 | 5 | Add QR display and scanning, manual reference entry, and camera permission fallback. Add local pickup reminders if time permits. | Done |
 
-Members 1, 2, 3 and 5 implementations are reviewed. The latest integration checks pass 71 mobile and 44 rules tests. Member 4 admin verification feedback, per-profile audit history and assigned-donation emulator demo data are implemented and awaiting review. Physical-device acceptance remains pending. See [pickup integration](19_PICKUP_AND_TRANSITIONS.md).
+All five Phase 4 implementations are reviewed. The latest integration checks pass 73 mobile, 3 admin and 45 rules tests. Member 4 adds verification feedback, paginated per-profile audit history and assigned-donation emulator fixtures. Deploy the new audit index before using profile audit history in the live project. Physical-device acceptance remains pending. See [pickup integration](19_PICKUP_AND_TRANSITIONS.md).
 
 **Ready when** the recipient confirms pickup on phone B and the donor completes it on phone A. Both phones show collected.
 

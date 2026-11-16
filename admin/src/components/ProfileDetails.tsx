@@ -18,10 +18,12 @@ import {
   onSnapshot,
   Timestamp,
   type DocumentData,
+  type QueryDocumentSnapshot,
 } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { getFirebaseClients } from '../lib/firebase';
 import { profileAuditsQuery, type AdminAuditRecord } from '../lib/verification';
+import { isReviewableSnapshot } from '../lib/review-validation';
 import type { Decision, PendingProfile } from './ReviewDialog';
 
 const dateFormat = new Intl.DateTimeFormat(undefined, {
@@ -63,58 +65,116 @@ export default function ProfileDetails({
   const [audits, setAudits] = useState<AdminAuditRecord[]>([]);
   const [auditsLoading, setAuditsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [attempt, setAttempt] = useState(0);
+  const [recordMeta, setRecordMeta] = useState<
+    Record<string, { fromCache: boolean; hasPendingWrites: boolean }>
+  >({});
+  const [auditError, setAuditError] = useState('');
+  const [auditCached, setAuditCached] = useState(true);
+  const [cursors, setCursors] = useState<QueryDocumentSnapshot<DocumentData>[]>(
+    [],
+  );
+  const cursor = cursors[cursors.length - 1];
+  const [nextCursor, setNextCursor] =
+    useState<QueryDocumentSnapshot<DocumentData>>();
 
   useEffect(() => {
+    let active = true;
     const { db } = getFirebaseClients();
-    const stops = ['profiles', 'users'].map((collection) =>
-      onSnapshot(
-        doc(db, collection, uid),
-        (snapshot) =>
-          setRecords((previous) => ({
-            ...previous,
-            [collection]: snapshot.data() ?? null,
-          })),
-        () => setError('Could not load profile details. Close and try again.'),
-      ),
-    );
-
-    const auditStop = onSnapshot(
-      profileAuditsQuery(uid),
-      (snapshot) => {
-        const list: AdminAuditRecord[] = snapshot.docs.map((docSnap) => {
-          const data = docSnap.data();
-          return {
-            id: docSnap.id,
-            action: String(data.action ?? ''),
-            adminUid: String(data.adminUid ?? ''),
-            targetUid: String(data.targetUid ?? ''),
-            reason: String(data.reason ?? ''),
-            previousStatus: String(data.previousStatus ?? ''),
-            newStatus: String(data.newStatus ?? ''),
-            createdAt:
-              data.createdAt instanceof Timestamp ? data.createdAt : null,
-          };
-        });
-        // Sort descending by createdAt in memory (safe without composite index)
-        list.sort((a, b) => {
-          const timeA = a.createdAt?.toMillis() ?? 0;
-          const timeB = b.createdAt?.toMillis() ?? 0;
-          return timeB - timeA;
-        });
-        setAudits(list);
-        setAuditsLoading(false);
-      },
-      () => {
-        setAuditsLoading(false);
-      },
-    );
-
+    const stops: (() => void)[] = [];
+    Promise.resolve().then(() => {
+      if (!active) return;
+      setError('');
+      setRecordMeta({});
+      for (const collection of ['profiles', 'users']) {
+        stops.push(
+          onSnapshot(
+            doc(db, collection, uid),
+            { includeMetadataChanges: true },
+            (snapshot) => {
+              if (!active) return;
+              setRecords((previous) => ({
+                ...previous,
+                [collection]: snapshot.data() ?? null,
+              }));
+              setRecordMeta((previous) => ({
+                ...previous,
+                [collection]: {
+                  fromCache: snapshot.metadata.fromCache,
+                  hasPendingWrites: snapshot.metadata.hasPendingWrites,
+                },
+              }));
+            },
+            () => {
+              if (active) setError('Could not load profile details. Retry.');
+            },
+          ),
+        );
+      }
+    });
     return () => {
+      active = false;
       stops.forEach((stop) => stop());
-      auditStop();
     };
-  }, [uid]);
+  }, [uid, attempt]);
 
+  useEffect(() => {
+    let active = true;
+    let stop: (() => void) | undefined;
+    Promise.resolve()
+      .then(() => {
+        if (!active) return;
+        setAuditsLoading(true);
+        setAuditError('');
+        stop = onSnapshot(
+          profileAuditsQuery(uid, cursor),
+          { includeMetadataChanges: true },
+          (snapshot) => {
+            if (!active) return;
+            setAudits(
+              snapshot.docs.map((item) => {
+                const data = item.data();
+                return {
+                  id: item.id,
+                  action: String(data.action ?? ''),
+                  adminUid: String(data.adminUid ?? ''),
+                  targetUid: String(data.targetUid ?? ''),
+                  reason: String(data.reason ?? ''),
+                  previousStatus: String(data.previousStatus ?? ''),
+                  newStatus: String(data.newStatus ?? ''),
+                  createdAt:
+                    data.createdAt instanceof Timestamp ? data.createdAt : null,
+                };
+              }),
+            );
+            setNextCursor(
+              snapshot.docs.length === 50 ? snapshot.docs[49] : undefined,
+            );
+            setAuditCached(
+              snapshot.metadata.fromCache || snapshot.metadata.hasPendingWrites,
+            );
+            setAuditsLoading(false);
+          },
+          () => {
+            if (!active) return;
+            setAuditError(
+              'Could not load audit history. Check deployment of the audit index and retry.',
+            );
+            setAuditsLoading(false);
+          },
+        );
+      })
+      .catch(() => {
+        if (active) {
+          setAuditError('Could not load audit history. Retry.');
+          setAuditsLoading(false);
+        }
+      });
+    return () => {
+      active = false;
+      stop?.();
+    };
+  }, [uid, cursor, attempt]);
   const profile = records.profiles;
   const user = records.users;
   const name =
@@ -132,6 +192,13 @@ export default function ProfileDetails({
   const status = String(profile?.verificationStatus ?? 'pending');
   const rejectionReason =
     typeof profile?.rejectionReason === 'string' ? profile.rejectionReason : '';
+  const readyToReview =
+    canReview &&
+    !error &&
+    isReviewableSnapshot(
+      profile,
+      recordMeta.profiles ?? { fromCache: true, hasPendingWrites: false },
+    );
   const lastAuditId =
     typeof profile?.lastAuditId === 'string' ? profile.lastAuditId : '';
 
@@ -181,7 +248,24 @@ export default function ProfileDetails({
       </DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2.5}>
-          {error && <Alert severity="error">{error}</Alert>}
+          {error && (
+            <Alert
+              severity="error"
+              action={
+                <Button onClick={() => setAttempt((v) => v + 1)}>Retry</Button>
+              }
+            >
+              {error}
+            </Alert>
+          )}
+          {!recordMeta.profiles ||
+          recordMeta.profiles.fromCache ||
+          recordMeta.profiles.hasPendingWrites ? (
+            <Alert severity="info">
+              Waiting for current profile information. Saved details may be out
+              of date.
+            </Alert>
+          ) : null}
 
           {/* Verification feedback section */}
           {status === 'rejected' && (
@@ -210,8 +294,8 @@ export default function ProfileDetails({
                 Profile Verified & Approved
               </Typography>
               <Typography variant="body2" sx={{ mt: 0.5 }}>
-                This account is active and verified to participate in food
-                rescue donations.
+                This profile is approved. Participation also requires an active
+                account; approval does not reactivate a suspended account.
               </Typography>
               {lastAuditId && (
                 <Typography
@@ -266,9 +350,25 @@ export default function ProfileDetails({
           {/* Audit trail for this profile */}
           <Box>
             <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
-              Audit History & Review Trail
+              Audit History & Review Trail — page {cursors.length + 1}
             </Typography>
-            {auditsLoading ? (
+            {auditCached && !auditsLoading && !auditError ? (
+              <Alert severity="info">
+                Showing saved audit history. It may be out of date.
+              </Alert>
+            ) : null}
+            {auditError ? (
+              <Alert
+                severity="error"
+                action={
+                  <Button onClick={() => setAttempt((v) => v + 1)}>
+                    Retry
+                  </Button>
+                }
+              >
+                {auditError}
+              </Alert>
+            ) : auditsLoading ? (
               <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                 <CircularProgress
                   size={18}
@@ -280,7 +380,11 @@ export default function ProfileDetails({
               </Stack>
             ) : audits.length === 0 ? (
               <Typography variant="body2" color="text.secondary">
-                No audit records recorded for this profile yet.
+                {cursor
+                  ? 'No older reviews on this page.'
+                  : auditCached
+                    ? 'No audit history is available offline.'
+                    : 'No reviews have been recorded for this profile.'}
               </Typography>
             ) : (
               <Stack spacing={1.5}>
@@ -346,28 +450,66 @@ export default function ProfileDetails({
               </Stack>
             )}
           </Box>
+          <Stack direction="row" spacing={1}>
+            <Button
+              disabled={auditsLoading || cursors.length === 0}
+              onClick={() => setCursors((v) => v.slice(0, -1))}
+            >
+              Previous reviews
+            </Button>
+            <Button
+              disabled={
+                auditsLoading || !nextCursor || auditCached || !!auditError
+              }
+              onClick={() => {
+                if (nextCursor) setCursors((v) => [...v, nextCursor]);
+              }}
+            >
+              Older reviews
+            </Button>
+          </Stack>
         </Stack>
       </DialogContent>
       <DialogActions sx={{ p: 2, justifyContent: 'space-between' }}>
         <Box>
-          {onReview && canReview && (
+          {onReview && (
             <Stack direction="row" spacing={1}>
               <Button
+                disabled={!readyToReview}
                 variant="outlined"
                 color="error"
                 size="small"
                 onClick={() => {
-                  onReview({ uid, name, role }, 'rejected');
+                  onReview(
+                    {
+                      uid,
+                      name,
+                      role,
+                      currentStatus: status,
+                      previousReason: rejectionReason,
+                    },
+                    'rejected',
+                  );
                 }}
               >
                 Reject
               </Button>
               <Button
+                disabled={!readyToReview}
                 variant="contained"
                 color="primary"
                 size="small"
                 onClick={() => {
-                  onReview({ uid, name, role }, 'approved');
+                  onReview(
+                    {
+                      uid,
+                      name,
+                      role,
+                      currentStatus: status,
+                      previousReason: rejectionReason,
+                    },
+                    'approved',
+                  );
                 }}
               >
                 Approve
