@@ -1,5 +1,12 @@
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { useCurrentTime } from '../hooks/use-current-time';
 import { localDateText, parseLocalDate } from '../lib/listing-form-validation';
 
@@ -167,19 +174,27 @@ export function DateTimePickerField({
           </View>
         </View>
 
+        {/* Optional quick preset pills */}
         {presets && presets.length > 0 && editable ? (
-          <View style={styles.presetsRow}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.presetsRow}
+          >
             {presets.map((preset) => (
               <Pressable
                 key={preset.label}
                 accessibilityRole="button"
                 onPress={() => handleApplyPreset(preset.offsetMinutes)}
-                style={styles.presetChip}
+                style={({ pressed }) => [
+                  styles.presetChip,
+                  pressed && styles.presetChipPressed,
+                ]}
               >
                 <Text style={styles.presetChipText}>{preset.label}</Text>
               </Pressable>
             ))}
-          </View>
+          </ScrollView>
         ) : null}
       </View>
 
@@ -290,24 +305,28 @@ const styles = StyleSheet.create({
   },
   presetsRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    paddingTop: 4,
+    alignItems: 'center',
+    gap: 8,
+    paddingTop: 8,
+    paddingBottom: 2,
     borderTopWidth: 1,
     borderTopColor: '#E2E8F0',
   },
   presetChip: {
-    backgroundColor: '#DCFCE7',
-    borderWidth: 1,
-    borderColor: '#86EFAC',
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    backgroundColor: '#E8F5E9',
+    borderWidth: 1.5,
+    borderColor: '#A5D6A7',
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+  },
+  presetChipPressed: {
+    backgroundColor: '#C8E6C9',
   },
   presetChipText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#15803D',
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1B5E20',
   },
   manualRow: {
     gap: 4,
